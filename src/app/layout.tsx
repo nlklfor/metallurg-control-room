@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
-const jetBrainsMono = JetBrains_Mono({
-  variable: "--font-geist-mono",
+const inter = Inter({
   subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "METALLURG_CONTROL_ROOM",
-  description: "Private administrative dashboard for industrial archive",
+  title: "METALLURG CONTROL ROOM",
+  description: "Private admin dashboard",
 };
 
 export default function RootLayout({
@@ -18,8 +19,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${jetBrainsMono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" className={`${inter.variable} h-full antialiased`}>
+      <body className="min-h-full bg-white text-[#0a0a0a]" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }
