@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils/cn";
+import { StatusBadge } from "@/components/StatusBadge";
 import type { Order, OrderItem, OrderStatus } from "@/types";
 
 const ORDER_STATUSES: OrderStatus[] = [
@@ -253,8 +254,8 @@ export default function OrdersPage() {
                   <td className="px-3 py-2 tabular-nums">
                     {order.total_price.toLocaleString("uk-UA")} UAH
                   </td>
-                  <td className="px-3 py-2 text-[11px] uppercase text-[#6b7280]">
-                    {order.status.replace(/_/g, " ")}
+                  <td className="px-3 py-2">
+                    <StatusBadge variant="order" status={order.status} />
                   </td>
                   <td className="px-3 py-2 text-[#6b7280]">
                     {formatOrderDate(order.created_at)}
