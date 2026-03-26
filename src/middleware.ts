@@ -35,9 +35,10 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Allow login page and static assets through
+  // Allow login page, auth callback, and static assets through
   if (
     pathname.startsWith("/login") ||
+    pathname.startsWith("/auth/callback") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
     pathname.match(/\.(svg|png|jpg|jpeg|gif|ico|webp|css|js|woff|woff2|ttf)$/)
