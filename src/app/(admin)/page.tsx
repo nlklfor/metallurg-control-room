@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { StatusBadge } from "@/components/StatusBadge";
+import { DotGrid } from "@/components/DotGrid";
+import { AnimatedStats } from "@/components/AnimatedStats";
 import type { OrderStatus } from "@/types";
 
 function formatOrderDate(iso: string) {
@@ -43,81 +45,74 @@ export default async function OverviewPage() {
   const residentsCount = residentsCountRes.count ?? 0;
   const recentOrders = recentOrdersRes.data ?? [];
 
-  return (
-    <div>
-      <div className="mb-8 grid grid-cols-4 gap-4">
-        {[
-          { label: "TOTAL ORDERS", value: ordersCount },
-          {
-            label: "REVENUE (UAH)",
-            value: revenue.toLocaleString("uk-UA"),
-          },
-          { label: "PRODUCTS", value: productsCount },
-          { label: "RESIDENTS", value: residentsCount },
-        ].map((card) => (
-          <div
-            key={card.label}
-            className="border border-[#e5e5e5] bg-white p-5"
-          >
-            <p className="mb-2 text-[10px] uppercase tracking-[0.2em] text-[#6b7280]">
-              {card.label}
-            </p>
-            <p className="text-[28px] font-bold text-[#0a0a0a]">{card.value}</p>
-          </div>
-        ))}
-      </div>
+  const stats = [
+    { label: "TOTAL ORDERS", value: String(ordersCount) },
+    { label: "REVENUE (UAH)", value: revenue.toLocaleString("uk-UA") },
+    { label: "PRODUCTS", value: String(productsCount) },
+    { label: "RESIDENTS", value: String(residentsCount) },
+  ];
 
-      <p className="mb-3 text-[11px] uppercase tracking-[0.2em] text-[#6b7280]">
-        // RECENT ORDERS
-      </p>
-      <div className="overflow-x-auto border border-[#e5e5e5]">
-        <table className="w-full border-collapse text-[13px]">
-          <thead>
-            <tr className="border-b border-[#e5e5e5] bg-[#f9fafb]">
-              {[
-                "ORDER ID",
-                "CUSTOMER",
-                "CONTACT",
-                "TOTAL",
-                "STATUS",
-                "DATE",
-              ].map((h) => (
-                <th
-                  key={h}
-                  className="px-4 py-3 text-left text-[10px] uppercase tracking-[0.15em] text-[#6b7280]"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {recentOrders.map((row) => (
-              <tr
-                key={String(row.id)}
-                className="border-b border-[#f5f5f5] hover:bg-[#fafafa]"
-              >
-                <td className="px-4 py-3 font-mono text-[12px] text-[#0a0a0a]">
-                  {row.order_number}
-                </td>
-                <td className="px-4 py-3 text-[#0a0a0a]">{row.customer_name}</td>
-                <td className="px-4 py-3 text-[#6b7280]">{row.contact}</td>
-                <td className="px-4 py-3 tabular-nums text-[#0a0a0a]">
-                  {(row.total_price ?? 0).toLocaleString("uk-UA")} UAH
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge
-                    variant="order"
-                    status={(row.status as OrderStatus) ?? null}
-                  />
-                </td>
-                <td className="px-4 py-3 text-[#6b7280]">
-                  {formatOrderDate(row.created_at)}
-                </td>
+  return (
+    <div className="relative">
+      {/* Subtle dot-grid background */}
+      <DotGrid />
+
+      {/* Content sits above the grid */}
+      <div className="relative z-10">
+        <AnimatedStats stats={stats} />
+
+        <p className="mb-3 text-[11px] uppercase tracking-[0.2em] text-[#6b7280]">
+          // RECENT ORDERS
+        </p>
+        <div className="overflow-x-auto border border-[#e5e5e5] bg-white">
+          <table className="w-full border-collapse text-[13px]">
+            <thead>
+              <tr className="border-b border-[#e5e5e5] bg-[#f9fafb]">
+                {[
+                  "ORDER ID",
+                  "CUSTOMER",
+                  "CONTACT",
+                  "TOTAL",
+                  "STATUS",
+                  "DATE",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="px-4 py-3 text-left text-[10px] uppercase tracking-[0.15em] text-[#6b7280]"
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {recentOrders.map((row) => (
+                <tr
+                  key={String(row.id)}
+                  className="border-b border-[#f5f5f5] hover:bg-[#fafafa]"
+                >
+                  <td className="px-4 py-3 font-mono text-[12px] text-[#0a0a0a]">
+                    {row.order_number}
+                  </td>
+                  <td className="px-4 py-3 text-[#0a0a0a]">{row.customer_name}</td>
+                  <td className="px-4 py-3 text-[#6b7280]">{row.contact}</td>
+                  <td className="px-4 py-3 tabular-nums text-[#0a0a0a]">
+                    {(row.total_price ?? 0).toLocaleString("uk-UA")} UAH
+                  </td>
+                  <td className="px-4 py-3">
+                    <StatusBadge
+                      variant="order"
+                      status={(row.status as OrderStatus) ?? null}
+                    />
+                  </td>
+                  <td className="px-4 py-3 text-[#6b7280]">
+                    {formatOrderDate(row.created_at)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

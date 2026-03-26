@@ -3,6 +3,7 @@
 import { Suspense, useState, useEffect } from "react";
 // import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
+import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 
 function LoginForm() {
@@ -67,7 +68,12 @@ function LoginForm() {
 
   if (sent) {
     return (
-      <div className="w-full max-w-sm text-center">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.97 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+        className="w-full max-w-sm text-center"
+      >
         <p className="text-[18px] font-bold text-[#0a0a0a]">METALLURG</p>
         <p className="mt-1 text-[11px] uppercase tracking-widest text-[#6b7280]">
           CONTROL ROOM
@@ -88,19 +94,34 @@ function LoginForm() {
             Send again
           </button>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="w-full max-w-sm">
-      <div className="mb-10 text-center">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
+      className="w-full max-w-sm"
+    >
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: 0.05, ease: [0.25, 0.1, 0.25, 1] }}
+        className="mb-10 text-center"
+      >
         <p className="text-[18px] font-bold text-[#0a0a0a]">METALLURG</p>
         <p className="mt-1 text-[11px] uppercase tracking-widest text-[#6b7280]">
           CONTROL ROOM
         </p>
-      </div>
-      <div className="border border-black p-10">
+      </motion.div>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: 0.12, ease: [0.25, 0.1, 0.25, 1] }}
+        className="border border-black p-10"
+      >
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <input
             type="email"
@@ -132,17 +153,32 @@ function LoginForm() {
             <p className="mt-2 text-xs text-red-500">{error}</p>
           ) : null}
         </form>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-white px-4">
-      <Suspense fallback={null}>
-        <LoginForm />
-      </Suspense>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-white px-4">
+      {/* Subtle dot-grid background */}
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 1.5, ease: "easeOut" }}
+        style={{
+          backgroundImage:
+            "radial-gradient(circle, #e5e7eb 1px, transparent 1px)",
+          backgroundSize: "28px 28px",
+        }}
+      />
+      <div className="relative z-10 w-full max-w-sm">
+        <Suspense fallback={null}>
+          <LoginForm />
+        </Suspense>
+      </div>
     </div>
   );
 }

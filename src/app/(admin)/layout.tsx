@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
+import { PageTransition } from "@/components/PageTransition";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function AdminLayout({
@@ -24,7 +25,9 @@ export default async function AdminLayout({
   return (
     <div className="flex min-h-screen bg-white">
       <Sidebar userEmail={user.email ?? null} />
-      <main className="ml-[220px] min-h-screen flex-1 bg-white p-8">{children}</main>
+      <main className="ml-[220px] min-h-screen flex-1 bg-white p-8">
+        <PageTransition>{children}</PageTransition>
+      </main>
     </div>
   );
 }
