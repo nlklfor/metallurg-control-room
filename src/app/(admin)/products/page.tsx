@@ -9,6 +9,17 @@ import type { Product } from "@/types";
 
 type StockStatus = NonNullable<Product["stock_status"]>;
 
+/** Convert a product name to a URL-safe slug */
+function toSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")   // remove non-word chars (except spaces and hyphens)
+    .replace(/[\s_]+/g, "-")    // spaces/underscores → hyphens
+    .replace(/-+/g, "-")        // collapse multiple hyphens
+    .replace(/^-+|-+$/g, "");   // trim leading/trailing hyphens
+}
+
 function rowToProduct(row: Record<string, unknown>): Product {
   return {
     id: String(row.id),
@@ -49,6 +60,8 @@ export default function ProductsPage() {
   const [toast, setToast] = useState(false);
 
   const [formName, setFormName] = useState("");
+  const [formSlug, setFormSlug] = useState("");
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [formPrice, setFormPrice] = useState("");
   const [formDescription, setFormDescription] = useState("");
   const [formMaterials, setFormMaterials] = useState("");
@@ -73,10 +86,25 @@ export default function ProductsPage() {
     void loadProducts();
   }, [loadProducts]);
 
+  // Auto-update slug when name changes (only if not manually edited)
+  function handleNameChange(value: string) {
+    setFormName(value);
+    if (!slugManuallyEdited) {
+      setFormSlug(toSlug(value));
+    }
+  }
+
+  function handleSlugChange(value: string) {
+    setFormSlug(value);
+    setSlugManuallyEdited(true);
+  }
+
   function openCreate() {
     setSelectedProduct(null);
     setPanelMode("create");
     setFormName("");
+    setFormSlug("");
+    setSlugManuallyEdited(false);
     setFormPrice("");
     setFormDescription("");
     setFormMaterials("");
@@ -93,6 +121,8 @@ export default function ProductsPage() {
     setSelectedProduct(p);
     setPanelMode("edit");
     setFormName(p.name ?? "");
+    setFormSlug(p.slug ?? toSlug(p.name ?? ""));
+    setSlugManuallyEdited(true); // in edit mode, don't auto-overwrite existing slug
     setFormPrice(p.price != null ? String(p.price) : "");
     setFormDescription(p.description ?? "");
     setFormMaterials(p.materials ?? "");
@@ -122,8 +152,13 @@ export default function ProductsPage() {
   async function saveProduct() {
     setSaving(true);
     const supabase = createClient();
+
+    // Final slug: use formSlug if set, otherwise auto-generate from name
+    const finalSlug = formSlug.trim() || toSlug(formName);
+
     const payload = {
       name: formName || null,
+      slug: finalSlug || null,
       price: formPrice === "" ? null : Number(formPrice),
       description: formDescription || null,
       materials: formMaterials || null,
@@ -324,10 +359,41 @@ export default function ProductsPage() {
                 </span>
                 <input
                   value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
+                  onChange={(e) => handleNameChange(e.target.value)}
                   className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
                 />
               </label>
+
+              {/* Slug field — auto-generated from name, manually overridable */}
+              <label className="block">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-[10px] uppercase text-[#6b7280]">
+                    slug
+                  </span>
+                  {slugManuallyEdited && formName && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormSlug(toSlug(formName));
+                        setSlugManuallyEdited(false);
+                      }}
+                      className="text-[10px] text-[#9ca3af] underline hover:text-black"
+                    >
+                      reset to auto
+                    </button>
+                  )}
+                </div>
+                <input
+                  value={formSlug}
+                  onChange={(e) => handleSlugChange(e.target.value)}
+                  placeholder="auto-generated from name"
+                  className="w-full border border-[#e5e5e5] px-3 py-2 font-mono text-[12px] text-[#6b7280] focus:border-black focus:outline-none focus:ring-0"
+                />
+                <span className="mt-1 block text-[11px] text-[#9ca3af]">
+                  Auto-generated from name. Edit to override.
+                </span>
+              </label>
+
               <label className="block">
                 <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
                   price (UAH)
