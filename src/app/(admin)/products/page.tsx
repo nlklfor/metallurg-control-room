@@ -41,6 +41,8 @@ function rowToProduct(row: Record<string, unknown>): Product {
     quantity: row.quantity == null ? null : Number(row.quantity),
     materials: row.materials == null ? null : String(row.materials),
     weight: row.weight == null ? null : String(row.weight),
+    box: row.box == null ? null : String(row.box),
+    condition: row.condition == null ? null : String(row.condition),
   };
 }
 
@@ -71,6 +73,8 @@ export default function ProductsPage() {
   const [formIsNew, setFormIsNew] = useState(false);
   const [formSizes, setFormSizes] = useState("");
   const [formImages, setFormImages] = useState("");
+  const [formBox, setFormBox] = useState("");
+  const [formCondition, setFormCondition] = useState("");
 
   const loadProducts = useCallback(async () => {
     const supabase = createClient();
@@ -114,6 +118,8 @@ export default function ProductsPage() {
     setFormIsNew(false);
     setFormSizes("");
     setFormImages("");
+    setFormBox("");
+    setFormCondition("");
     setPanelOpen(true);
   }
 
@@ -132,6 +138,8 @@ export default function ProductsPage() {
     setFormIsNew(Boolean(p.is_new));
     setFormSizes((p.sizes ?? []).join(", "));
     setFormImages((p.image_url ?? []).join("\n"));
+    setFormBox(p.box ?? "");
+    setFormCondition(p.condition ?? "");
     setPanelOpen(true);
   }
 
@@ -168,6 +176,8 @@ export default function ProductsPage() {
       is_new: formIsNew,
       sizes: parseSizes(),
       image_url: parseImages(),
+      box: formBox || null,
+      condition: formCondition || null,
     };
 
     let error = null;
@@ -503,6 +513,28 @@ export default function ProductsPage() {
                 <span className="mt-1 block text-[11px] text-[#9ca3af]">
                   Each line = one image URL
                 </span>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
+                  box
+                </span>
+                <input
+                  value={formBox}
+                  onChange={(e) => setFormBox(e.target.value)}
+                  placeholder="e.g. Box A"
+                  className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
+                  condition
+                </span>
+                <input
+                  value={formCondition}
+                  onChange={(e) => setFormCondition(e.target.value)}
+                  placeholder="e.g. New, Used"
+                  className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
+                />
               </label>
               <button
                 type="button"
