@@ -222,7 +222,8 @@ export default function ProductsPage() {
         </button>
       </div>
 
-      <div className="overflow-x-auto border border-[#e5e5e5]">
+      {/* Desktop table */}
+      <div className="hidden overflow-x-auto border border-[#e5e5e5] lg:block">
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-[#e5e5e5] bg-[#f9fafb]">
@@ -339,9 +340,67 @@ export default function ProductsPage() {
         </table>
       </div>
 
+      {/* Mobile card list */}
+      <div className="flex flex-col gap-3 lg:hidden">
+        {products.map((p) => (
+          <div
+            key={p.id}
+            onClick={() => openEdit(p)}
+            className="flex cursor-pointer items-start gap-3 border border-[#e5e5e5] bg-white p-3 transition-colors hover:bg-[#f9fafb]"
+          >
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden border border-[#e5e5e5] bg-[#f9fafb]">
+              {p.image_url?.[0] ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={p.image_url[0]} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-[9px] text-[#d1d5db]">—</span>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="truncate text-[13px] font-medium text-[#0a0a0a]">
+                  {p.name ?? "—"}
+                </span>
+                {p.is_new ? (
+                  <span className="shrink-0 bg-black px-1.5 py-0.5 text-[8px] text-white">NEW</span>
+                ) : null}
+              </div>
+              <div className="mt-1 flex items-center gap-3 text-[12px]">
+                <span className="tabular-nums text-[#0a0a0a]">
+                  {p.price != null ? `${p.price.toLocaleString("uk-UA")} UAH` : "—"}
+                </span>
+                <StatusBadge variant="stock" status={p.stock_status} />
+              </div>
+              <div className="mt-1 flex items-center justify-between">
+                <span className="text-[11px] text-[#9ca3af]">qty: {p.quantity ?? "—"}</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (deleteConfirmId === p.id) {
+                      void deleteProduct(p.id);
+                    } else {
+                      setDeleteConfirmId(p.id);
+                    }
+                  }}
+                  className={cn(
+                    "text-[10px] uppercase",
+                    deleteConfirmId === p.id
+                      ? "text-red-500 font-medium"
+                      : "text-[#d1d5db] hover:text-red-500"
+                  )}
+                >
+                  {deleteConfirmId === p.id ? "TAP TO CONFIRM" : <Trash2 size={14} />}
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <div
         className={cn(
-          "fixed right-0 top-0 z-50 h-full w-[480px] border-l border-[#e5e5e5] bg-white transition-transform duration-200",
+          "fixed right-0 top-0 z-50 h-full w-full border-l border-[#e5e5e5] bg-white transition-transform duration-200 lg:w-[480px]",
           panelOpen ? "translate-x-0" : "translate-x-full",
         )}
       >

@@ -64,7 +64,9 @@ export default async function OverviewPage() {
         <p className="mb-3 text-[11px] uppercase tracking-[0.2em] text-[#6b7280]">
           // RECENT ORDERS
         </p>
-        <div className="overflow-x-auto border border-[#e5e5e5] bg-white">
+
+        {/* Desktop table */}
+        <div className="hidden overflow-x-auto border border-[#e5e5e5] bg-white lg:block">
           <table className="w-full border-collapse text-[13px]">
             <thead>
               <tr className="border-b border-[#e5e5e5] bg-[#f9fafb]">
@@ -112,6 +114,33 @@ export default async function OverviewPage() {
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile card list */}
+        <div className="flex flex-col gap-3 lg:hidden">
+          {recentOrders.map((row) => (
+            <div
+              key={String(row.id)}
+              className="border border-[#e5e5e5] bg-white p-4"
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[12px] font-medium text-[#0a0a0a]">
+                  {row.order_number}
+                </span>
+                <StatusBadge
+                  variant="order"
+                  status={(row.status as OrderStatus) ?? null}
+                />
+              </div>
+              <p className="mt-1 text-[13px] text-[#0a0a0a]">{row.customer_name}</p>
+              <div className="mt-2 flex items-center justify-between text-[12px] text-[#6b7280]">
+                <span className="tabular-nums">
+                  {(row.total_price ?? 0).toLocaleString("uk-UA")} UAH
+                </span>
+                <span>{formatOrderDate(row.created_at)}</span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

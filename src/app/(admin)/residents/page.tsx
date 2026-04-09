@@ -255,7 +255,8 @@ export default function ResidentsPage() {
         </div>
       )}
 
-      <div className="overflow-x-auto border border-[#e5e5e5]">
+      {/* Desktop table */}
+      <div className="hidden overflow-x-auto border border-[#e5e5e5] lg:block">
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-[#e5e5e5] bg-[#f9fafb]">
@@ -289,6 +290,71 @@ export default function ResidentsPage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile card list */}
+      <div className="flex flex-col gap-3 lg:hidden">
+        {rows.map((row, i) => {
+          const handle = row.tg_username ?? row.username ?? "";
+          const displayHandle = handle ? `@${handle}` : "—";
+          const chatId = row.chat_id == null ? null : String(row.chat_id);
+          const oc = orderCountMap.get(String(row.chat_id)) ?? 0;
+          const isVerified = oc >= 3;
+          const letter = handle ? avatarLetter(handle) : "?";
+          const bgColor = handle ? avatarColor(handle) : "bg-[#374151]";
+
+          return (
+            <div
+              key={row.idx ?? row.id ?? `${chatId ?? ""}-${i}`}
+              className="border border-[#e5e5e5] bg-white p-4"
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center text-[12px] font-bold text-white ${bgColor}`}
+                >
+                  {letter}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate font-medium text-[13px] text-[#0a0a0a]">
+                      {displayHandle}
+                    </span>
+                    {isVerified && (
+                      <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center bg-black text-white text-[8px]">
+                        ✓
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-[#6b7280]">{chatId ?? "—"}</span>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="block text-[12px] tabular-nums font-medium text-[#0a0a0a]">
+                    {oc} {oc === 1 ? "order" : "orders"}
+                  </span>
+                  <span className="block text-[10px] text-[#9ca3af]">
+                    {formatRegisteredAt(row.created_at)}
+                  </span>
+                </div>
+              </div>
+              <div className="mt-3 flex gap-2">
+                <input
+                  type="text"
+                  value={row.box ?? ""}
+                  onChange={(e) => handleUpdate(chatId, "box", e.target.value)}
+                  placeholder="Box"
+                  className="flex-1 border border-[#e5e5e5] px-2 py-1.5 text-[12px] focus:border-black focus:outline-none focus:ring-0"
+                />
+                <input
+                  type="text"
+                  value={row.condition ?? ""}
+                  onChange={(e) => handleUpdate(chatId, "condition", e.target.value)}
+                  placeholder="Condition"
+                  className="flex-1 border border-[#e5e5e5] px-2 py-1.5 text-[12px] focus:border-black focus:outline-none focus:ring-0"
+                />
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {rows.length === 0 && (

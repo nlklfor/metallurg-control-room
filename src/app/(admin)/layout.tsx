@@ -25,7 +25,7 @@ export default async function AdminLayout({
   return (
     <div className="flex min-h-screen bg-white">
       <Sidebar userEmail={user.email ?? null} />
-      <main className="min-h-screen flex-1 bg-white p-4 lg:ml-[220px] lg:p-8">
+      <main className="min-h-screen flex-1 bg-white px-3 pb-4 pt-16 lg:ml-[220px] lg:px-8 lg:pb-8 lg:pt-8">
         <PageTransition>{children}</PageTransition>
       </main>
     </div>
