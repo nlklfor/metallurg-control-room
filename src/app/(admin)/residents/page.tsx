@@ -5,14 +5,9 @@ import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils/cn";
 
 type BotUserRow = {
-  idx?: number | string | null;
-  id?: string | null;
   tg_username?: string | null;
-  username?: string | null;
   chat_id?: number | string | null;
   created_at?: string | null;
-  box?: string | null;
-  condition?: string | null;
 };
 
 type OrderCountRow = {
@@ -30,13 +25,11 @@ function formatRegisteredAt(iso: string | null | undefined) {
   return `${dd}.${mm}.${yyyy} ${hh}:${min}`;
 }
 
-/** Get the first letter of a username for the avatar */
 function avatarLetter(handle: string): string {
   const clean = handle.replace(/^@/, "");
   return (clean[0] ?? "?").toUpperCase();
 }
 
-/** Deterministic muted color based on username */
 function avatarColor(handle: string): string {
   const colors = [
     "bg-[#1a1a1a]",
@@ -59,14 +52,12 @@ function ResidentRow({
   row,
   i,
   orderCount,
-  onUpdate,
 }: {
   row: BotUserRow;
   i: number;
   orderCount: number;
-  onUpdate: (chatId: string | null, field: "box" | "condition", value: string) => void;
 }) {
-  const handle = row.tg_username ?? row.username ?? "";
+  const handle = row.tg_username ?? "";
   const displayHandle = handle ? `@${handle}` : "—";
   const chatId = row.chat_id == null ? null : String(row.chat_id);
   const isVerified = orderCount >= 3;
@@ -75,13 +66,11 @@ function ResidentRow({
 
   return (
     <tr
-      key={row.idx ?? row.id ?? `${chatId ?? ""}-${i}`}
       className={cn(
         i % 2 === 1 ? "border-b border-[#f5f5f5] bg-[#f9fafb]" : "border-b border-[#f5f5f5] bg-white",
         "hover:bg-[#f5f5f5] transition-colors"
       )}
     >
-      {/* Avatar + username */}
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
           <div
@@ -93,10 +82,8 @@ function ResidentRow({
         </div>
       </td>
 
-      {/* Chat ID */}
       <td className="px-4 py-3 tabular-nums text-[#6b7280]">{chatId ?? "—"}</td>
 
-      {/* Order count */}
       <td className="px-4 py-3 tabular-nums">
         {orderCount > 0 ? (
           <span className="font-medium text-[#0a0a0a]">{orderCount}</span>
@@ -105,7 +92,6 @@ function ResidentRow({
         )}
       </td>
 
-      {/* Verified badge */}
       <td className="px-4 py-3">
         {isVerified ? (
           <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#0a0a0a]">
@@ -119,29 +105,6 @@ function ResidentRow({
         )}
       </td>
 
-      {/* Box input */}
-      <td className="px-4 py-3">
-        <input
-          type="text"
-          value={row.box ?? ""}
-          onChange={(e) => onUpdate(chatId, "box", e.target.value)}
-          placeholder="—"
-          className="w-24 border border-[#e5e5e5] px-2 py-1 text-[12px] focus:border-black focus:outline-none focus:ring-0 bg-white"
-        />
-      </td>
-
-      {/* Condition input */}
-      <td className="px-4 py-3">
-        <input
-          type="text"
-          value={row.condition ?? ""}
-          onChange={(e) => onUpdate(chatId, "condition", e.target.value)}
-          placeholder="—"
-          className="w-28 border border-[#e5e5e5] px-2 py-1 text-[12px] focus:border-black focus:outline-none focus:ring-0 bg-white"
-        />
-      </td>
-
-      {/* Registered at */}
       <td className="px-4 py-3 text-[#6b7280]">{formatRegisteredAt(row.created_at)}</td>
     </tr>
   );
@@ -151,26 +114,27 @@ export default function ResidentsPage() {
   const [rows, setRows] = useState<BotUserRow[]>([]);
   const [orderCountMap, setOrderCountMap] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     const supabase = createClient();
 
     const [usersRes, ordersRes] = await Promise.all([
-      supabase.from("bot_users").select("*").order("created_at", { ascending: false }),
+      supabase
+        .from("bot_users")
+        .select("tg_username, chat_id, created_at")
+        .order("created_at", { ascending: false }),
       supabase.from("orders").select("customer_chat_id"),
     ]);
 
     if (usersRes.error) {
       setError(usersRes.error.message);
     } else {
-      setRows(usersRes.data as BotUserRow[] ?? []);
+      setRows((usersRes.data as BotUserRow[]) ?? []);
     }
 
-    // Build order count map
     const map = new Map<string, number>();
-    for (const o of ordersRes.data ?? []) {
+    for (const o of (ordersRes.data ?? []) as OrderCountRow[]) {
       if (o.customer_chat_id == null) continue;
       const key = String(o.customer_chat_id);
       map.set(key, (map.get(key) ?? 0) + 1);
@@ -182,37 +146,6 @@ export default function ResidentsPage() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
-
-  const handleUpdate = useCallback(
-    async (chatId: string | null, field: "box" | "condition", value: string) => {
-      if (!chatId) return;
-      setSaving(chatId);
-      setError(null);
-
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("bot_users")
-        .update({ [field]: value || null })
-        .eq("chat_id", chatId);
-
-      if (error) {
-        setError(error.message);
-      } else {
-        // Update local state
-        setRows((prev) =>
-          prev.map((row) => {
-            if (String(row.chat_id) === chatId) {
-              return { ...row, [field]: value || null };
-            }
-            return row;
-          })
-        );
-      }
-
-      setSaving(null);
-    },
-    []
-  );
 
   if (loading) {
     return (
@@ -236,17 +169,12 @@ export default function ResidentsPage() {
     );
   }
 
-  const count = rows.length;
-
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6">
         <p className="text-[11px] uppercase tracking-[0.2em] text-[#6b7280]">
-          // TOTAL_RESIDENTS: {count}
+          // TOTAL_RESIDENTS: {rows.length}
         </p>
-        {saving && (
-          <p className="text-[10px] uppercase tracking-[0.15em] text-[#6b7280]">Saving...</p>
-        )}
       </div>
 
       {error && (
@@ -260,15 +188,7 @@ export default function ResidentsPage() {
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-[#e5e5e5] bg-[#f9fafb]">
-              {[
-                "RESIDENT",
-                "CHAT_ID",
-                "ORDERS",
-                "STATUS",
-                "BOX",
-                "CONDITION",
-                "REGISTERED_AT",
-              ].map((h) => (
+              {["RESIDENT", "CHAT_ID", "ORDERS", "STATUS", "REGISTERED_AT"].map((h) => (
                 <th
                   key={h}
                   className="px-4 py-3 text-left text-[10px] uppercase tracking-[0.15em] text-[#6b7280]"
@@ -281,11 +201,10 @@ export default function ResidentsPage() {
           <tbody>
             {rows.map((row, i) => (
               <ResidentRow
-                key={row.idx ?? row.id ?? `${row.chat_id ?? ""}-${i}`}
+                key={`${row.chat_id ?? ""}-${i}`}
                 row={row}
                 i={i}
                 orderCount={orderCountMap.get(String(row.chat_id)) ?? 0}
-                onUpdate={handleUpdate}
               />
             ))}
           </tbody>
@@ -295,7 +214,7 @@ export default function ResidentsPage() {
       {/* Mobile card list */}
       <div className="flex flex-col gap-3 lg:hidden">
         {rows.map((row, i) => {
-          const handle = row.tg_username ?? row.username ?? "";
+          const handle = row.tg_username ?? "";
           const displayHandle = handle ? `@${handle}` : "—";
           const chatId = row.chat_id == null ? null : String(row.chat_id);
           const oc = orderCountMap.get(String(row.chat_id)) ?? 0;
@@ -305,7 +224,7 @@ export default function ResidentsPage() {
 
           return (
             <div
-              key={row.idx ?? row.id ?? `${chatId ?? ""}-${i}`}
+              key={`${chatId ?? ""}-${i}`}
               className="border border-[#e5e5e5] bg-white p-4"
             >
               <div className="flex items-center gap-3">
@@ -335,22 +254,6 @@ export default function ResidentsPage() {
                     {formatRegisteredAt(row.created_at)}
                   </span>
                 </div>
-              </div>
-              <div className="mt-3 flex gap-2">
-                <input
-                  type="text"
-                  value={row.box ?? ""}
-                  onChange={(e) => handleUpdate(chatId, "box", e.target.value)}
-                  placeholder="Box"
-                  className="flex-1 border border-[#e5e5e5] px-2 py-1.5 text-[12px] focus:border-black focus:outline-none focus:ring-0"
-                />
-                <input
-                  type="text"
-                  value={row.condition ?? ""}
-                  onChange={(e) => handleUpdate(chatId, "condition", e.target.value)}
-                  placeholder="Condition"
-                  className="flex-1 border border-[#e5e5e5] px-2 py-1.5 text-[12px] focus:border-black focus:outline-none focus:ring-0"
-                />
               </div>
             </div>
           );
