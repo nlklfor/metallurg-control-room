@@ -14,7 +14,7 @@ export interface Product {
   description: string | null;
   image_url: string[] | null;
   model_3d_url: string | null;
-  sizes: number[] | null;
+  sizes: (string | number)[] | null;
   is_new: boolean | null;
   stock_status: "in_stock" | "out_of_stock" | "pre_order" | null;
   slug: string | null;

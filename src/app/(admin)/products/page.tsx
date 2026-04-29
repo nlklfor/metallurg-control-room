@@ -33,7 +33,7 @@ function rowToProduct(row: Record<string, unknown>): Product {
     model_3d_url:
       row.model_3d_url == null ? null : String(row.model_3d_url),
     sizes: Array.isArray(row.sizes)
-      ? (row.sizes as number[])
+      ? (row.sizes as (string | number)[])
       : null,
     is_new: row.is_new == null ? null : Boolean(row.is_new),
     stock_status: (row.stock_status as StockStatus) ?? null,
@@ -143,11 +143,15 @@ export default function ProductsPage() {
     setPanelOpen(true);
   }
 
-  function parseSizes(): number[] {
+  function parseSizes(): (string | number)[] {
     return formSizes
       .split(",")
-      .map((s) => Number(s.trim()))
-      .filter((n) => !Number.isNaN(n) && n !== 0);
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => {
+        const n = Number(s);
+        return Number.isNaN(n) ? s : n;
+      });
   }
 
   function parseImages(): string[] {
@@ -551,11 +555,11 @@ export default function ProductsPage() {
                 <input
                   value={formSizes}
                   onChange={(e) => setFormSizes(e.target.value)}
-                  placeholder="40, 41, 42, 43, 44"
+                  placeholder="40, 41, 42 or S, M, L, XL"
                   className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
                 />
                 <span className="mt-1 block text-[11px] text-[#9ca3af]">
-                  Comma-separated numbers
+                  Comma-separated — numbers or letters
                 </span>
               </label>
               <label className="block">
