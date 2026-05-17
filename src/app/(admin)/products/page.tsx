@@ -41,6 +41,7 @@ function rowToProduct(row: Record<string, unknown>): Product {
     quantity: row.quantity == null ? null : Number(row.quantity),
     materials: row.materials == null ? null : String(row.materials),
     weight: row.weight == null ? null : String(row.weight),
+    sku: row.sku == null ? null : String(row.sku),
     box: row.box == null ? null : String(row.box),
     condition: row.condition == null ? null : String(row.condition),
   };
@@ -73,6 +74,7 @@ export default function ProductsPage() {
   const [formIsNew, setFormIsNew] = useState(false);
   const [formSizes, setFormSizes] = useState("");
   const [formImages, setFormImages] = useState("");
+  const [formSku, setFormSku] = useState("");
   const [formBox, setFormBox] = useState("");
   const [formCondition, setFormCondition] = useState("");
 
@@ -118,6 +120,7 @@ export default function ProductsPage() {
     setFormIsNew(false);
     setFormSizes("");
     setFormImages("");
+    setFormSku("");
     setFormBox("");
     setFormCondition("");
     setPanelOpen(true);
@@ -138,6 +141,7 @@ export default function ProductsPage() {
     setFormIsNew(Boolean(p.is_new));
     setFormSizes((p.sizes ?? []).join(", "));
     setFormImages((p.image_url ?? []).join("\n"));
+    setFormSku(p.sku ?? "");
     setFormBox(p.box ?? "");
     setFormCondition(p.condition ?? "");
     setPanelOpen(true);
@@ -180,6 +184,7 @@ export default function ProductsPage() {
       is_new: formIsNew,
       sizes: parseSizes(),
       image_url: parseImages(),
+      sku: formSku || null,
       box: formBox || null,
       condition: formCondition || null,
     };
@@ -434,6 +439,18 @@ export default function ProductsPage() {
                   value={formName}
                   onChange={(e) => handleNameChange(e.target.value)}
                   className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
+                  sku
+                </span>
+                <input
+                  value={formSku}
+                  onChange={(e) => setFormSku(e.target.value)}
+                  placeholder="e.g. MTL-JKT-001"
+                  className="w-full border border-[#e5e5e5] px-3 py-2 font-mono text-[12px] focus:border-black focus:outline-none focus:ring-0"
                 />
               </label>
 

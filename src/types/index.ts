@@ -21,6 +21,7 @@ export interface Product {
   quantity: number | null;
   materials: string | null;
   weight: string | null;
+  sku?: string | null;
   box?: string | null;
   condition?: string | null;
 }
