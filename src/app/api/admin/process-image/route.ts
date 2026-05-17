@@ -6,7 +6,7 @@ import sharp from "sharp";
 
 export const runtime = "nodejs";
 
-const PHOTOROOM_URL = "https://sdk.photoroom.com/v1/segment";
+const CLIPDROP_URL = "https://clipdrop-api.co/remove-background/v1";
 
 function makeServiceClient() {
   return createClient(
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const photoroomKey = process.env.PHOTOROOM_API_KEY ?? "";
+  const clipdropKey = process.env.CLIPDROP_API_KEY ?? "";
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
   const originalName = file.name;
@@ -103,49 +103,49 @@ export async function POST(request: NextRequest) {
 
       try {
         // Guard: check env vars before starting
-        if (!photoroomKey || photoroomKey === "your_photoroom_api_key_here") {
+        if (!clipdropKey) {
           throw new Error(
-            "PHOTOROOM_API_KEY is not configured in .env.local",
+            "CLIPDROP_API_KEY is not configured in .env.local",
           );
         }
-        if (!serviceKey || serviceKey === "your_service_role_key_here") {
+        if (!serviceKey) {
           throw new Error(
             "SUPABASE_SERVICE_ROLE_KEY is not configured in .env.local",
           );
         }
 
-        // Step 1: Background removal via Photoroom
-        send({ step: "PH_API", msg: "> PH_API: Requesting_BG_Removal..." });
+        // Step 1: Background removal via Clipdrop
+        send({ step: "CD_API", msg: "> CD_API: Requesting_BG_Removal..." });
 
-        const { body: phBody, contentType: phCt } = buildMultipart(
+        const { body: cdBody, contentType: cdCt } = buildMultipart(
           "image_file",
           originalName,
           file.type,
           buffer,
         );
 
-        const phRes = await fetch(PHOTOROOM_URL, {
+        const cdRes = await fetch(CLIPDROP_URL, {
           method: "POST",
           headers: {
-            "x-api-key": photoroomKey,
-            "Content-Type": phCt,
+            "x-api-key": clipdropKey,
+            "Content-Type": cdCt,
           },
-          body: new Uint8Array(phBody),
+          body: new Uint8Array(cdBody),
         });
 
-        if (!phRes.ok) {
-          const errText = await phRes.text().catch(() => phRes.statusText);
+        if (!cdRes.ok) {
+          const errText = await cdRes.text().catch(() => cdRes.statusText);
           const hint =
-            phRes.status === 403
-              ? " — check API key & plan tier at photoroom.com/api"
-              : phRes.status === 401
+            cdRes.status === 403
+              ? " — check API key at clipdrop.co/apis"
+              : cdRes.status === 401
                 ? " — invalid API key"
                 : "";
-          throw new Error(`PH_API_ERR: ${phRes.status}${hint} ${errText}`);
+          throw new Error(`CD_API_ERR: ${cdRes.status}${hint} ${errText}`);
         }
 
-        const removedBgBuf = Buffer.from(await phRes.arrayBuffer());
-        send({ step: "PH_API_OK", msg: "> PH_API: BG_Removal... OK" });
+        const removedBgBuf = Buffer.from(await cdRes.arrayBuffer());
+        send({ step: "CD_API_OK", msg: "> CD_API: BG_Removal... OK" });
 
         // Step 2: Convert to WebP with sharp
         send({
