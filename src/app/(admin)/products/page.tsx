@@ -5,9 +5,10 @@ import { Trash2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils/cn";
 import { StatusBadge } from "@/components/StatusBadge";
-import type { Product } from "@/types";
+import type { Product, ProductCategory } from "@/types";
 
 type StockStatus = NonNullable<Product["stock_status"]>;
+type SizeEntry = { size: string; qty: number };
 
 /** Convert a product name to a URL-safe slug */
 function toSlug(name: string): string {
@@ -18,6 +19,30 @@ function toSlug(name: string): string {
     .replace(/[\s_]+/g, "-")    // spaces/underscores → hyphens
     .replace(/-+/g, "-")        // collapse multiple hyphens
     .replace(/^-+|-+$/g, "");   // trim leading/trailing hyphens
+}
+
+function sizeStockToEntries(obj: Record<string, number> | null): SizeEntry[] {
+  if (!obj) return [];
+  return Object.entries(obj).map(([size, qty]) => ({ size, qty }));
+}
+
+function entriesToSizeStock(entries: SizeEntry[]): Record<string, number> {
+  return Object.fromEntries(
+    entries.filter((e) => e.size.trim()).map((e) => [e.size.trim(), e.qty]),
+  );
+}
+
+function deriveSizes(entries: SizeEntry[]): (string | number)[] {
+  return entries
+    .filter((e) => e.size.trim())
+    .map((e) => {
+      const n = Number(e.size.trim());
+      return Number.isNaN(n) ? e.size.trim() : n;
+    });
+}
+
+function deriveQuantity(entries: SizeEntry[]): number {
+  return entries.reduce((sum, e) => sum + e.qty, 0);
 }
 
 function rowToProduct(row: Record<string, unknown>): Product {
@@ -35,8 +60,15 @@ function rowToProduct(row: Record<string, unknown>): Product {
     sizes: Array.isArray(row.sizes)
       ? (row.sizes as (string | number)[])
       : null,
+    size_stock:
+      row.size_stock != null &&
+      typeof row.size_stock === "object" &&
+      !Array.isArray(row.size_stock)
+        ? (row.size_stock as Record<string, number>)
+        : null,
     is_new: row.is_new == null ? null : Boolean(row.is_new),
     stock_status: (row.stock_status as StockStatus) ?? null,
+    category: (row.category as ProductCategory) ?? null,
     slug: row.slug == null ? null : String(row.slug),
     quantity: row.quantity == null ? null : Number(row.quantity),
     materials: row.materials == null ? null : String(row.materials),
@@ -47,11 +79,8 @@ function rowToProduct(row: Record<string, unknown>): Product {
   };
 }
 
-const STOCK_OPTIONS: StockStatus[] = [
-  "in_stock",
-  "out_of_stock",
-  "pre_order",
-];
+const STOCK_OPTIONS: StockStatus[] = ["in_stock", "out_of_stock", "pre_order"];
+const CATEGORY_OPTIONS: ProductCategory[] = ["apparel", "footwear", "accessories"];
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -69,10 +98,10 @@ export default function ProductsPage() {
   const [formDescription, setFormDescription] = useState("");
   const [formMaterials, setFormMaterials] = useState("");
   const [formWeight, setFormWeight] = useState("");
-  const [formQuantity, setFormQuantity] = useState("");
   const [formStock, setFormStock] = useState<StockStatus>("in_stock");
   const [formIsNew, setFormIsNew] = useState(false);
-  const [formSizes, setFormSizes] = useState("");
+  const [formSizeStock, setFormSizeStock] = useState<SizeEntry[]>([]);
+  const [formCategory, setFormCategory] = useState<ProductCategory | "">("");
   const [formImages, setFormImages] = useState("");
   const [formSku, setFormSku] = useState("");
   const [formBox, setFormBox] = useState("");
@@ -92,7 +121,6 @@ export default function ProductsPage() {
     void loadProducts();
   }, [loadProducts]);
 
-  // Auto-update slug when name changes (only if not manually edited)
   function handleNameChange(value: string) {
     setFormName(value);
     if (!slugManuallyEdited) {
@@ -105,6 +133,22 @@ export default function ProductsPage() {
     setSlugManuallyEdited(true);
   }
 
+  function updateSizeEntry(i: number, patch: Partial<SizeEntry>) {
+    setFormSizeStock((prev) => {
+      const next = [...prev];
+      next[i] = { ...next[i], ...patch };
+      return next;
+    });
+  }
+
+  function removeSizeEntry(i: number) {
+    setFormSizeStock((prev) => prev.filter((_, j) => j !== i));
+  }
+
+  function addSizeEntry() {
+    setFormSizeStock((prev) => [...prev, { size: "", qty: 0 }]);
+  }
+
   function openCreate() {
     setSelectedProduct(null);
     setPanelMode("create");
@@ -115,10 +159,10 @@ export default function ProductsPage() {
     setFormDescription("");
     setFormMaterials("");
     setFormWeight("");
-    setFormQuantity("");
     setFormStock("in_stock");
     setFormIsNew(false);
-    setFormSizes("");
+    setFormSizeStock([]);
+    setFormCategory("");
     setFormImages("");
     setFormSku("");
     setFormBox("");
@@ -131,31 +175,20 @@ export default function ProductsPage() {
     setPanelMode("edit");
     setFormName(p.name ?? "");
     setFormSlug(p.slug ?? toSlug(p.name ?? ""));
-    setSlugManuallyEdited(true); // in edit mode, don't auto-overwrite existing slug
+    setSlugManuallyEdited(true);
     setFormPrice(p.price != null ? String(p.price) : "");
     setFormDescription(p.description ?? "");
     setFormMaterials(p.materials ?? "");
     setFormWeight(p.weight ?? "");
-    setFormQuantity(p.quantity != null ? String(p.quantity) : "");
     setFormStock(p.stock_status ?? "in_stock");
     setFormIsNew(Boolean(p.is_new));
-    setFormSizes((p.sizes ?? []).join(", "));
+    setFormSizeStock(sizeStockToEntries(p.size_stock));
+    setFormCategory(p.category ?? "");
     setFormImages((p.image_url ?? []).join("\n"));
     setFormSku(p.sku ?? "");
     setFormBox(p.box ?? "");
     setFormCondition(p.condition ?? "");
     setPanelOpen(true);
-  }
-
-  function parseSizes(): (string | number)[] {
-    return formSizes
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .map((s) => {
-        const n = Number(s);
-        return Number.isNaN(n) ? s : n;
-      });
   }
 
   function parseImages(): string[] {
@@ -169,8 +202,8 @@ export default function ProductsPage() {
     setSaving(true);
     const supabase = createClient();
 
-    // Final slug: use formSlug if set, otherwise auto-generate from name
     const finalSlug = formSlug.trim() || toSlug(formName);
+    const sizeStock = entriesToSizeStock(formSizeStock);
 
     const payload = {
       name: formName || null,
@@ -179,10 +212,12 @@ export default function ProductsPage() {
       description: formDescription || null,
       materials: formMaterials || null,
       weight: formWeight || null,
-      quantity: formQuantity === "" ? null : Number(formQuantity),
       stock_status: formStock,
       is_new: formIsNew,
-      sizes: parseSizes(),
+      category: formCategory || null,
+      size_stock: sizeStock,
+      sizes: deriveSizes(formSizeStock),
+      quantity: deriveQuantity(formSizeStock),
       image_url: parseImages(),
       sku: formSku || null,
       box: formBox || null,
@@ -215,6 +250,8 @@ export default function ProductsPage() {
     setDeleteConfirmId(null);
     await loadProducts();
   }
+
+  const totalQty = deriveQuantity(formSizeStock);
 
   return (
     <div className="relative min-h-[calc(100vh-4rem)]">
@@ -454,7 +491,6 @@ export default function ProductsPage() {
                 />
               </label>
 
-              {/* Slug field — auto-generated from name, manually overridable */}
               <label className="block">
                 <div className="mb-1 flex items-center justify-between">
                   <span className="text-[10px] uppercase text-[#6b7280]">
@@ -495,49 +531,25 @@ export default function ProductsPage() {
                   className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
                 />
               </label>
+
               <label className="block">
                 <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
-                  description
+                  category
                 </span>
-                <textarea
-                  rows={3}
-                  value={formDescription}
-                  onChange={(e) => setFormDescription(e.target.value)}
+                <select
+                  value={formCategory}
+                  onChange={(e) => setFormCategory(e.target.value as ProductCategory | "")}
                   className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
-                />
+                >
+                  <option value="">— select —</option>
+                  {CATEGORY_OPTIONS.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
               </label>
-              <label className="block">
-                <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
-                  materials
-                </span>
-                <input
-                  value={formMaterials}
-                  onChange={(e) => setFormMaterials(e.target.value)}
-                  className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
-                  weight
-                </span>
-                <input
-                  value={formWeight}
-                  onChange={(e) => setFormWeight(e.target.value)}
-                  placeholder="e.g. 1.2 kg"
-                  className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
-                  quantity
-                </span>
-                <input
-                  type="number"
-                  value={formQuantity}
-                  onChange={(e) => setFormQuantity(e.target.value)}
-                  className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
-                />
-              </label>
+
               <label className="block">
                 <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
                   stock_status
@@ -554,6 +566,7 @@ export default function ProductsPage() {
                   ))}
                 </select>
               </label>
+
               <label className="flex items-center gap-2 text-[13px]">
                 <input
                   type="checkbox"
@@ -565,20 +578,119 @@ export default function ProductsPage() {
                   Mark as NEW arrival
                 </span>
               </label>
+
+              {/* size_stock editor — derives sizes[] and quantity automatically */}
+              <div>
+                <span className="mb-2 block text-[10px] uppercase text-[#6b7280]">
+                  size_stock
+                </span>
+                <div className="flex flex-col gap-1.5">
+                  {formSizeStock.map((entry, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input
+                        value={entry.size}
+                        onChange={(e) => updateSizeEntry(i, { size: e.target.value })}
+                        placeholder="S / 42"
+                        className="w-20 border border-[#e5e5e5] px-2 py-1.5 font-mono text-[12px] focus:border-black focus:outline-none focus:ring-0"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        value={entry.qty}
+                        onChange={(e) =>
+                          updateSizeEntry(i, { qty: Math.max(0, Number(e.target.value)) })
+                        }
+                        className="w-16 border border-[#e5e5e5] px-2 py-1.5 text-[12px] tabular-nums focus:border-black focus:outline-none focus:ring-0"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeSizeEntry(i)}
+                        className="text-[#d1d5db] hover:text-red-500"
+                        aria-label="Remove size"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addSizeEntry}
+                    className="mt-0.5 text-left text-[10px] uppercase tracking-[0.15em] text-[#9ca3af] hover:text-black"
+                  >
+                    + add size
+                  </button>
+                </div>
+                {formSizeStock.length > 0 && (
+                  <span className="mt-1.5 block text-[11px] text-[#9ca3af]">
+                    total qty: {totalQty} · sizes: {deriveSizes(formSizeStock).join(", ") || "—"}
+                  </span>
+                )}
+                {formStock === "pre_order" && formSizeStock.length === 0 && (
+                  <span className="mt-1.5 block text-[11px] text-[#9ca3af]">
+                    pre_order — size_stock may be empty
+                  </span>
+                )}
+              </div>
+
               <label className="block">
                 <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
-                  sizes
+                  description
                 </span>
-                <input
-                  value={formSizes}
-                  onChange={(e) => setFormSizes(e.target.value)}
-                  placeholder="40, 41, 42 or S, M, L, XL"
+                <textarea
+                  rows={3}
+                  value={formDescription}
+                  onChange={(e) => setFormDescription(e.target.value)}
                   className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
                 />
-                <span className="mt-1 block text-[11px] text-[#9ca3af]">
-                  Comma-separated — numbers or letters
-                </span>
               </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
+                  materials
+                </span>
+                <input
+                  value={formMaterials}
+                  onChange={(e) => setFormMaterials(e.target.value)}
+                  className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
+                  weight
+                </span>
+                <input
+                  value={formWeight}
+                  onChange={(e) => setFormWeight(e.target.value)}
+                  placeholder="e.g. 1.2 kg"
+                  className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
+                  condition
+                </span>
+                <input
+                  value={formCondition}
+                  onChange={(e) => setFormCondition(e.target.value)}
+                  placeholder="e.g. New with tags"
+                  className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
+                  box
+                </span>
+                <input
+                  value={formBox}
+                  onChange={(e) => setFormBox(e.target.value)}
+                  placeholder="e.g. Original box"
+                  className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
+                />
+              </label>
+
               <label className="block">
                 <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
                   image_url
@@ -594,28 +706,7 @@ export default function ProductsPage() {
                   Each line = one image URL
                 </span>
               </label>
-              <label className="block">
-                <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
-                  box
-                </span>
-                <input
-                  value={formBox}
-                  onChange={(e) => setFormBox(e.target.value)}
-                  placeholder="e.g. Box A"
-                  className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
-                  condition
-                </span>
-                <input
-                  value={formCondition}
-                  onChange={(e) => setFormCondition(e.target.value)}
-                  placeholder="e.g. New, Used"
-                  className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
-                />
-              </label>
+
               <button
                 type="button"
                 disabled={saving}
