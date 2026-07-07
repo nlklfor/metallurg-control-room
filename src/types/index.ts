@@ -6,6 +6,8 @@ export type OrderStatus =
   | "completed"
   | "cancelled";
 
+export type ProductCategory = "apparel" | "footwear" | "accessories";
+
 export interface Product {
   id: string;
   created_at: string;
@@ -14,13 +16,18 @@ export interface Product {
   description: string | null;
   image_url: string[] | null;
   model_3d_url: string | null;
-  sizes: number[] | null;
+  sizes: (string | number)[] | null;
+  size_stock: Record<string, number> | null;
   is_new: boolean | null;
   stock_status: "in_stock" | "out_of_stock" | "pre_order" | null;
+  category: ProductCategory | null;
   slug: string | null;
   quantity: number | null;
   materials: string | null;
   weight: string | null;
+  sku?: string | null;
+  box?: string | null;
+  condition?: string | null;
 }
 
 export interface OrderItem {

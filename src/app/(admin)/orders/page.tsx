@@ -172,43 +172,46 @@ export default function OrdersPage() {
   return (
     <div className="relative min-h-[calc(100vh-4rem)]">
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setFilterStatus("ALL")}
-          className={cn(
-            "border px-3 py-2 text-[11px] uppercase tracking-[0.15em]",
-            filterStatus === "ALL"
-              ? "border-black bg-black text-white"
-              : "border-[#e5e5e5] bg-white text-[#6b7280] hover:border-black",
-          )}
-        >
-          ALL
-        </button>
-        {ORDER_STATUSES.map((st) => (
+        <div className="flex flex-wrap gap-1.5">
           <button
-            key={st}
             type="button"
-            onClick={() => setFilterStatus(st)}
+            onClick={() => setFilterStatus("ALL")}
             className={cn(
-              "border px-3 py-2 text-[11px] uppercase tracking-[0.15em]",
-              filterStatus === st
+              "border px-2.5 py-1.5 text-[10px] uppercase tracking-[0.15em] lg:px-3 lg:py-2 lg:text-[11px]",
+              filterStatus === "ALL"
                 ? "border-black bg-black text-white"
                 : "border-[#e5e5e5] bg-white text-[#6b7280] hover:border-black",
             )}
           >
-            {st.replace(/_/g, " ")}
+            ALL
           </button>
-        ))}
+          {ORDER_STATUSES.map((st) => (
+            <button
+              key={st}
+              type="button"
+              onClick={() => setFilterStatus(st)}
+              className={cn(
+                "border px-2.5 py-1.5 text-[10px] uppercase tracking-[0.15em] lg:px-3 lg:py-2 lg:text-[11px]",
+                filterStatus === st
+                  ? "border-black bg-black text-white"
+                  : "border-[#e5e5e5] bg-white text-[#6b7280] hover:border-black",
+              )}
+            >
+              {st.replace(/_/g, " ")}
+            </button>
+          ))}
+        </div>
         <input
           type="search"
           placeholder="Search order or customer..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="ml-auto w-64 border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
+          className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0 lg:ml-auto lg:w-64"
         />
       </div>
 
-      <div className="overflow-x-auto border border-[#e5e5e5]">
+      {/* Desktop table */}
+      <div className="hidden overflow-x-auto border border-[#e5e5e5] lg:block">
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-[#e5e5e5] bg-[#f9fafb]">
@@ -267,9 +270,35 @@ export default function OrdersPage() {
         </table>
       </div>
 
+      {/* Mobile card list */}
+      <div className="flex flex-col gap-3 lg:hidden">
+        {filtered.map((order) => (
+          <div
+            key={order.id}
+            onClick={() => setSelectedOrder(order)}
+            className={cn(
+              "cursor-pointer border border-[#e5e5e5] bg-white p-4 transition-colors hover:bg-[#f9fafb]",
+              selectedOrder?.id === order.id && "bg-[#f5f5f5]",
+            )}
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <span className="font-mono text-[12px] font-medium text-[#0a0a0a]">
+                {order.order_number}
+              </span>
+              <StatusBadge variant="order" status={order.status} />
+            </div>
+            <p className="text-[13px] text-[#0a0a0a]">{order.customer_name}</p>
+            <div className="mt-2 flex items-center justify-between text-[12px] text-[#6b7280]">
+              <span>{order.total_price.toLocaleString("uk-UA")} UAH</span>
+              <span>{formatOrderDate(order.created_at)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <div
         className={cn(
-          "fixed right-0 top-0 z-50 h-full w-[480px] border-l border-[#e5e5e5] bg-white transition-transform duration-200",
+          "fixed right-0 top-0 z-50 h-full w-full border-l border-[#e5e5e5] bg-white transition-transform duration-200 lg:w-[480px]",
           selectedOrder ? "translate-x-0" : "translate-x-full",
         )}
         aria-hidden={!selectedOrder}
