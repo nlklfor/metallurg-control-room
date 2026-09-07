@@ -101,7 +101,8 @@ src/
 │   │   ├── residents/     # Registered Telegram bot users
 │   │   └── upload/        # Batch image upload (bg removal → WebP → Storage)
 │   ├── api/admin/process-image/  # WebP conversion + Storage upload (sharp)
-│   ├── auth/callback/     # Supabase magic-link exchange
+│   ├── auth/confirm/      # verifyOtp(token_hash) — email link target
+│   ├── auth/callback/     # verifyOtp + legacy ?code= exchange
 │   └── login/             # Magic-link sign-in page
 ├── components/            # Sidebar, status badges, animated stats, etc.
 ├── lib/supabase/          # Browser, server, and shared Supabase clients; checkAdmin()
@@ -112,10 +113,12 @@ src/
 
 ## Authentication flow
 
-1. The admin enters their email on `/login` and receives a Supabase magic link (`shouldCreateUser: false` — unknown emails get no link and no account).
-2. The link redirects to `/auth/callback`, which exchanges the code for a session.
+1. The admin enters their email on `/login` and receives an email (`shouldCreateUser: false` — unknown emails get nothing).
+2. The email link points to `/auth/confirm?token_hash=…&type=…`, which calls `supabase.auth.verifyOtp(...)` to establish the session (no PKCE code-verifier cookie needed — resilient to link scanners and localhost/prod origin splits). `/auth/callback` handles the same, plus the legacy `?code=` exchange. Alternatively the admin types the 6-digit code from the email into `/login`.
 3. `src/middleware.ts` checks every request: unauthenticated users are sent to `/login`; authenticated users for whom `is_admin()` is not true are also redirected.
 4. The `(admin)` layout runs the same `is_admin()` check server-side as a second guard before rendering any protected page, and `/api/admin/process-image` runs it before doing any work.
+
+> Requires the Supabase **Site URL** and **Redirect URLs** to be set correctly — see `docs/email-templates/README.md`.
 
 ## Deployment
 

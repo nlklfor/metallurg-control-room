@@ -10,8 +10,9 @@ const SAMPLE = {
   "{{ .Email }}": "mtllrg@proton.me",
   "{{ .NewEmail }}": "new-address@proton.me",
   "{{ .Token }}": "048213",
+  "{{ .TokenHash }}": "9f2c1b7ee4a0c3d5a1e8b2f47c60d9aa11223344556677889900aabbccddeeff0",
   "{{ .ConfirmationURL }}":
-    "https://control.metallurg.store/auth/callback?token=pkce_9f2c1b7ee4a0&type=magiclink",
+    "https://control.metallurg.store/auth/confirm?token_hash=9f2c1b7ee4a0&type=magiclink",
   "{{ .SiteURL }}": "https://control.metallurg.store",
   "{{ .RedirectTo }}": "https://control.metallurg.store/",
 };

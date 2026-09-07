@@ -24,21 +24,48 @@ There is no build step — these are the final strings Supabase sends. Edit the
 `.html` files here and re-paste when you change them (keep the repo copy as the
 source of truth).
 
+## How the link works (important)
+
+These templates **do not** use Supabase's default `{{ .ConfirmationURL }}`.
+That link relies on the PKCE code-verifier cookie being present wherever the
+link opens, which breaks when the link lands on a different origin than where
+sign-in was requested (localhost vs deployed) or when an email scanner touches
+it first — this is what caused the "Authentication failed" error.
+
+Instead the button points to:
+
+```
+{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=<type>
+```
+
+which the app's `src/app/auth/confirm/route.ts` verifies with
+`supabase.auth.verifyOtp({ type, token_hash })` — no cookie dependency, works
+across devices. `type` per template: `magiclink`, `signup`, `invite`,
+`recovery`, `email_change`.
+
+### Required Supabase dashboard settings
+
+Authentication → **URL Configuration**:
+
+- **Site URL** = the URL you actually use the app at (e.g.
+  `https://control.metallurg.store`, or `http://localhost:3000` while
+  developing). `{{ .SiteURL }}` in the links resolves to this.
+- **Redirect URLs** — add every origin you sign in from:
+  `http://localhost:3000/**` and your production `https://…/**`.
+
+If Site URL is wrong, the email link points at the wrong host and sign-in
+fails regardless of the template.
+
 ## Template variables used
 
-Supabase substitutes these (Go template syntax) before sending:
-
-- `{{ .ConfirmationURL }}` — the action link. **Unchanged from the Supabase
-  default**, so the existing sign-in flow keeps working.
+- `{{ .SiteURL }}` / `{{ .TokenHash }}` — build the verification link (above).
 - `{{ .Token }}` — 6-digit one-time code. Shown as a "backup code" in
-  `magic-link`, `confirm-signup`, `recovery`, `email-change`.
-- `{{ .Email }}` — the recipient address (shown in the footer).
+  `magic-link`, `confirm-signup`, `recovery`, `email-change`. The `/login`
+  page's "enter the 6-digit code" input verifies it
+  (`verifyOtp({ email, token, type: 'email' })`) — this is the scanner-proof
+  path when the link itself gets consumed.
+- `{{ .Email }}` — recipient address (footer).
 - `{{ .NewEmail }}` — used only in `email-change.html`.
-
-> The backup code is only usable if there's a screen that accepts it. The
-> `/login` page currently only does the email-link flow — the code is there for
-> when a client mangles the button, and as a hook if you later add a
-> "enter code" input (ask and I'll wire it up).
 
 ## Sending / SMTP
 
