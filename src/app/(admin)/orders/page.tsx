@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils/cn";
+import { formatDateTime } from "@/lib/utils/format";
 import { StatusBadge } from "@/components/StatusBadge";
 import type { Order, OrderItem, OrderStatus } from "@/types";
 
@@ -64,18 +65,10 @@ function rowToOrder(row: Record<string, unknown>): Order {
   };
 }
 
-function formatOrderDate(iso: string) {
-  const d = new Date(iso);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-  return `${dd}.${mm}.${yyyy} ${hh}:${min}`;
-}
-
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [filterStatus, setFilterStatus] = useState<OrderStatus | "ALL">("ALL");
   const [searchQuery, setSearchQuery] = useState("");
@@ -83,6 +76,7 @@ export default function OrdersPage() {
   const [savedFlash, setSavedFlash] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const [panelStatus, setPanelStatus] = useState<OrderStatus>(
     "waiting_for_payment",
@@ -90,14 +84,18 @@ export default function OrdersPage() {
   const [panelTracking, setPanelTracking] = useState("");
 
   const loadOrders = useCallback(async () => {
+    setLoading(true);
     const supabase = createClient();
     const { data, error } = await supabase
       .from("orders")
       .select("*")
       .order("created_at", { ascending: false });
+    setLoading(false);
     if (error) {
+      setLoadError(error.message);
       return;
     }
+    setLoadError(null);
     setOrders((data ?? []).map((r) => rowToOrder(r as Record<string, unknown>)));
   }, []);
 
@@ -110,6 +108,7 @@ export default function OrdersPage() {
       setPanelStatus(selectedOrder.status);
       setPanelTracking(selectedOrder.tracking_number ?? "");
       setDeleteConfirm(false);
+      setActionError(null);
     }
   }, [selectedOrder]);
 
@@ -129,6 +128,7 @@ export default function OrdersPage() {
   async function saveChanges() {
     if (!selectedOrder) return;
     setSaving(true);
+    setActionError(null);
     const supabase = createClient();
     const { error } = await supabase
       .from("orders")
@@ -139,7 +139,10 @@ export default function OrdersPage() {
       })
       .eq("id", selectedOrder.id);
     setSaving(false);
-    if (error) return;
+    if (error) {
+      setActionError(error.message);
+      return;
+    }
     await loadOrders();
     setSelectedOrder((prev) =>
       prev && prev.id === selectedOrder.id
@@ -158,19 +161,52 @@ export default function OrdersPage() {
   async function confirmDelete() {
     if (!selectedOrder) return;
     setDeleting(true);
+    setActionError(null);
     const supabase = createClient();
     const { error } = await supabase
       .from("orders")
       .delete()
       .eq("id", selectedOrder.id);
     setDeleting(false);
-    if (error) return;
+    if (error) {
+      setActionError(error.message);
+      return;
+    }
     setSelectedOrder(null);
     await loadOrders();
   }
 
+  if (loading && orders.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <p className="text-[11px] uppercase tracking-[0.2em] text-[#6b7280]">
+          Loading orders...
+        </p>
+      </div>
+    );
+  }
+
+  if (loadError && orders.length === 0) {
+    return (
+      <div className="py-20 text-center">
+        <p className="text-sm text-red-500">Error: {loadError}</p>
+        <button
+          onClick={() => void loadOrders()}
+          className="mt-4 border border-black px-4 py-2 text-[11px] uppercase tracking-[0.15em] transition-colors hover:bg-black hover:text-white"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="relative min-h-[calc(100vh-4rem)]">
+      {loadError ? (
+        <div className="mb-4 border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600">
+          {loadError}
+        </div>
+      ) : null}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap gap-1.5">
           <button
@@ -261,7 +297,7 @@ export default function OrdersPage() {
                     <StatusBadge variant="order" status={order.status} />
                   </td>
                   <td className="px-3 py-2 text-[#6b7280]">
-                    {formatOrderDate(order.created_at)}
+                    {formatDateTime(order.created_at)}
                   </td>
                 </tr>
               );
@@ -290,7 +326,7 @@ export default function OrdersPage() {
             <p className="text-[13px] text-[#0a0a0a]">{order.customer_name}</p>
             <div className="mt-2 flex items-center justify-between text-[12px] text-[#6b7280]">
               <span>{order.total_price.toLocaleString("uk-UA")} UAH</span>
-              <span>{formatOrderDate(order.created_at)}</span>
+              <span>{formatDateTime(order.created_at)}</span>
             </div>
           </div>
         ))}
@@ -326,7 +362,7 @@ export default function OrdersPage() {
                 <dl className="space-y-2">
                   {[
                     ["Order number", selectedOrder.order_number],
-                    ["Date", formatOrderDate(selectedOrder.created_at)],
+                    ["Date", formatDateTime(selectedOrder.created_at)],
                     ["Customer", selectedOrder.customer_name],
                     ["Contact", selectedOrder.contact],
                     ["Shipping zone", selectedOrder.shipping_zone],
@@ -426,6 +462,9 @@ export default function OrdersPage() {
                 </button>
                 {savedFlash ? (
                   <p className="mt-2 text-xs text-green-600">✓ Saved</p>
+                ) : null}
+                {actionError ? (
+                  <p className="mt-2 text-xs text-red-500">{actionError}</p>
                 ) : null}
               </section>
 

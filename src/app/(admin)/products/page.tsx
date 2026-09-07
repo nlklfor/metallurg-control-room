@@ -84,6 +84,9 @@ const CATEGORY_OPTIONS: ProductCategory[] = ["apparel", "footwear", "accessories
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [panelMode, setPanelMode] = useState<"edit" | "create">("edit");
   const [panelOpen, setPanelOpen] = useState(false);
@@ -108,12 +111,18 @@ export default function ProductsPage() {
   const [formCondition, setFormCondition] = useState("");
 
   const loadProducts = useCallback(async () => {
+    setLoading(true);
     const supabase = createClient();
     const { data, error } = await supabase
       .from("products")
       .select("*")
       .order("created_at", { ascending: false });
-    if (error) return;
+    setLoading(false);
+    if (error) {
+      setLoadError(error.message);
+      return;
+    }
+    setLoadError(null);
     setProducts((data ?? []).map((r) => rowToProduct(r as Record<string, unknown>)));
   }, []);
 
@@ -150,6 +159,7 @@ export default function ProductsPage() {
   }
 
   function openCreate() {
+    setActionError(null);
     setSelectedProduct(null);
     setPanelMode("create");
     setFormName("");
@@ -171,6 +181,7 @@ export default function ProductsPage() {
   }
 
   function openEdit(p: Product) {
+    setActionError(null);
     setSelectedProduct(p);
     setPanelMode("edit");
     setFormName(p.name ?? "");
@@ -200,6 +211,7 @@ export default function ProductsPage() {
 
   async function saveProduct() {
     setSaving(true);
+    setActionError(null);
     const supabase = createClient();
 
     const finalSlug = formSlug.trim() || toSlug(formName);
@@ -236,7 +248,10 @@ export default function ProductsPage() {
       error = res.error;
     }
     setSaving(false);
-    if (error) return;
+    if (error) {
+      setActionError(error.message);
+      return;
+    }
     await loadProducts();
     setPanelOpen(false);
     setToast(true);
@@ -244,17 +259,50 @@ export default function ProductsPage() {
   }
 
   async function deleteProduct(id: string) {
+    setActionError(null);
     const supabase = createClient();
     const { error } = await supabase.from("products").delete().eq("id", id);
-    if (error) return;
+    if (error) {
+      setActionError(error.message);
+      return;
+    }
     setDeleteConfirmId(null);
     await loadProducts();
   }
 
   const totalQty = deriveQuantity(formSizeStock);
 
+  if (loading && products.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <p className="text-[11px] uppercase tracking-[0.2em] text-[#6b7280]">
+          Loading products...
+        </p>
+      </div>
+    );
+  }
+
+  if (loadError && products.length === 0) {
+    return (
+      <div className="py-20 text-center">
+        <p className="text-sm text-red-500">Error: {loadError}</p>
+        <button
+          onClick={() => void loadProducts()}
+          className="mt-4 border border-black px-4 py-2 text-[11px] uppercase tracking-[0.15em] transition-colors hover:bg-black hover:text-white"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="relative min-h-[calc(100vh-4rem)]">
+      {(loadError || actionError) && !panelOpen ? (
+        <div className="mb-4 border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600">
+          {actionError ?? loadError}
+        </div>
+      ) : null}
       <div className="mb-6 flex justify-between">
         <p className="text-[11px] uppercase tracking-[0.2em] text-[#6b7280]">
           // PRODUCTS
@@ -715,6 +763,9 @@ export default function ProductsPage() {
               >
                 {saving ? "SAVING..." : "SAVE PRODUCT"}
               </button>
+              {actionError ? (
+                <p className="text-xs text-red-500">{actionError}</p>
+              ) : null}
             </div>
           </div>
         ) : null}
