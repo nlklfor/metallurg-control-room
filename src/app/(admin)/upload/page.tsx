@@ -41,6 +41,7 @@ function logLineColor(line: string): string {
 
 export default function UploadPage() {
   const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [removeBg, setRemoveBg] = useState(true);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -60,12 +61,62 @@ export default function UploadPage() {
     [],
   );
 
+  const removeBackgroundInBrowser = useCallback(
+    async (id: string, file: File): Promise<Blob> => {
+      updateItemById(id, (prev) => ({
+        log: [...prev.log, "> IMGLY: Requesting_BG_Removal..."],
+      }));
+      // Loaded on demand — pulls a ~40MB model from the imgly CDN on first use,
+      // then the browser caches it. Runs entirely client-side (no API, no quota).
+      const { removeBackground } = await import("@imgly/background-removal");
+      let modelNoted = false;
+      const out = await removeBackground(file, {
+        output: { format: "image/png" },
+        progress: (key) => {
+          if (key.startsWith("fetch") && !modelNoted) {
+            modelNoted = true;
+            updateItemById(id, (prev) => ({
+              log: [
+                ...prev.log,
+                "> IMGLY: Downloading_model (first run only, ~40MB)...",
+              ],
+            }));
+          }
+        },
+      });
+      updateItemById(id, (prev) => ({
+        log: [...prev.log, "> IMGLY: BG_Removal... OK"],
+      }));
+      return out;
+    },
+    [updateItemById],
+  );
+
   const processFile = useCallback(
-    async (id: string, file: File) => {
+    async (id: string, file: File, stripBg: boolean) => {
       updateItemById(id, { status: "processing" });
 
+      let uploadBlob: Blob = file;
+      let uploadName = file.name;
+
+      if (stripBg) {
+        try {
+          uploadBlob = await removeBackgroundInBrowser(id, file);
+          uploadName = `${file.name.replace(/\.[^/.]+$/, "")}.png`;
+        } catch (err) {
+          updateItemById(id, (prev) => ({
+            log: [
+              ...prev.log,
+              `> IMGLY: BG_Removal FAILED (${String(err)}) — uploading original`,
+            ],
+          }));
+          uploadBlob = file;
+          uploadName = file.name;
+        }
+      }
+
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadBlob, uploadName);
 
       let response: Response;
       try {
@@ -121,7 +172,7 @@ export default function UploadPage() {
         }
       }
     },
-    [updateItemById],
+    [updateItemById, removeBackgroundInBrowser],
   );
 
   const onDrop = useCallback(
@@ -141,10 +192,10 @@ export default function UploadPage() {
       setQueue((prev) => [...prev, ...newItems]);
 
       for (const item of newItems) {
-        await processFile(item.id, item.file);
+        await processFile(item.id, item.file, removeBg);
       }
     },
-    [processFile],
+    [processFile, removeBg],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -182,6 +233,25 @@ export default function UploadPage() {
         <div className="p-5">
           {/* Boot line */}
           <p className="mb-5 text-[#4ade80]">[BATCH_UPLOAD_INIT]</p>
+
+          {/* Options */}
+          <label
+            className={`mb-4 flex w-fit items-center gap-2 text-[10px] uppercase tracking-[0.15em] ${
+              isProcessing
+                ? "cursor-not-allowed text-[#4b5563]"
+                : "cursor-pointer text-[#9ca3af] hover:text-[#e5e5e5]"
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={removeBg}
+              disabled={isProcessing}
+              onChange={(e) => setRemoveBg(e.target.checked)}
+              className="h-3.5 w-3.5 accent-[#4ade80]"
+            />
+            REMOVE_BACKGROUND
+            <span className="text-[#4b5563]">// in-browser, no api</span>
+          </label>
 
           {/* Drop zone */}
           <div

@@ -5,35 +5,18 @@ import { checkAdmin } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
-const CLIPDROP_URL = "https://clipdrop-api.co/remove-background/v1";
+/**
+ * Receives an image (background already removed client-side by
+ * @imgly/background-removal), converts it to WebP, and stores it in the
+ * `products` Storage bucket. Uploads need the service role because that bucket
+ * has no INSERT policy. Progress is streamed back as newline-delimited JSON.
+ */
 
 function makeServiceClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
-}
-
-/** Build a multipart/form-data body manually to guarantee correct binary encoding. */
-function buildMultipart(
-  fieldName: string,
-  fileName: string,
-  mimeType: string,
-  data: Buffer,
-): { body: Buffer; contentType: string } {
-  const boundary = `----FormBoundary${Date.now()}${Math.random().toString(16).slice(2)}`;
-  const crlf = "\r\n";
-  const header = Buffer.from(
-    `--${boundary}${crlf}` +
-      `Content-Disposition: form-data; name="${fieldName}"; filename="${fileName}"${crlf}` +
-      `Content-Type: ${mimeType}${crlf}` +
-      crlf,
-  );
-  const footer = Buffer.from(`${crlf}--${boundary}--${crlf}`);
-  return {
-    body: Buffer.concat([header, data, footer]),
-    contentType: `multipart/form-data; boundary=${boundary}`,
-  };
 }
 
 export async function POST(request: NextRequest) {
@@ -65,10 +48,8 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const clipdropKey = process.env.CLIPDROP_API_KEY ?? "";
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
-
-  const originalName = file.name;
+  const originalName = file.name || "image.png";
   const buffer = Buffer.from(await file.arrayBuffer());
   const encoder = new TextEncoder();
 
@@ -79,58 +60,19 @@ export async function POST(request: NextRequest) {
       };
 
       try {
-        // Guard: check env vars before starting
-        if (!clipdropKey) {
-          throw new Error(
-            "CLIPDROP_API_KEY is not configured in .env.local",
-          );
-        }
         if (!serviceKey) {
           throw new Error(
             "SUPABASE_SERVICE_ROLE_KEY is not configured in .env.local",
           );
         }
 
-        // Step 1: Background removal via Clipdrop
-        send({ step: "CD_API", msg: "> CD_API: Requesting_BG_Removal..." });
-
-        const { body: cdBody, contentType: cdCt } = buildMultipart(
-          "image_file",
-          originalName,
-          file.type,
-          buffer,
-        );
-
-        const cdRes = await fetch(CLIPDROP_URL, {
-          method: "POST",
-          headers: {
-            "x-api-key": clipdropKey,
-            "Content-Type": cdCt,
-          },
-          body: new Uint8Array(cdBody),
-        });
-
-        if (!cdRes.ok) {
-          const errText = await cdRes.text().catch(() => cdRes.statusText);
-          const hint =
-            cdRes.status === 403
-              ? " — check API key at clipdrop.co/apis"
-              : cdRes.status === 401
-                ? " — invalid API key"
-                : "";
-          throw new Error(`CD_API_ERR: ${cdRes.status}${hint} ${errText}`);
-        }
-
-        const removedBgBuf = Buffer.from(await cdRes.arrayBuffer());
-        send({ step: "CD_API_OK", msg: "> CD_API: BG_Removal... OK" });
-
-        // Step 2: Convert to WebP with sharp
+        // Step 1: Convert to WebP with sharp (preserving alpha).
         send({
           step: "SHARP",
           msg: "> SHARP_CORE: Converting_to_WebP[Q:90]...",
         });
 
-        const webpBuf = await sharp(removedBgBuf)
+        const webpBuf = await sharp(buffer)
           .webp({ quality: 90 })
           .toBuffer();
 
@@ -139,7 +81,7 @@ export async function POST(request: NextRequest) {
           msg: "> SHARP_CORE: Converting_to_WebP[Q:90]... OK",
         });
 
-        // Step 3: Upload to Supabase Storage
+        // Step 2: Upload to Supabase Storage.
         const baseName = originalName.replace(/\.[^/.]+$/, "");
         const fileName = `uploads/${baseName}_${Date.now()}.webp`;
 

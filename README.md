@@ -22,6 +22,7 @@ Customers interact with the storefront through a Telegram bot; Control Room is w
 - **Order management** — searchable, filterable order table with a slide-in detail panel to review line items, update fulfillment status, attach a tracking number, and delete an order (with confirmation).
 - **Product catalog** — full CRUD for products: pricing, stock status, sizes, materials, weight, and images, with a slug that auto-generates from the product name (and can be manually overridden).
 - **Residents directory** — everyone registered through the Telegram bot, with a deterministic avatar, per-resident order count, and a "verified" badge once a resident has 3+ orders.
+- **Batch image upload** — drag-and-drop up to 20 images. Background removal runs **in the browser** (`@imgly/background-removal`, no API key or quota); each image is then sent to `/api/admin/process-image`, converted to WebP, and stored in the `products` Storage bucket. Progress streams into a terminal-style log.
 - **Passwordless auth** — sign-in via Supabase magic link. Access is gated on the database `public.admins` table (via the `is_admin()` SQL function — the same predicate the RLS policies use), checked in `middleware.ts`, the `(admin)` layout, and the image API route. Anyone not in `admins` is redirected to `/login`.
 
 ## Tech stack
@@ -33,6 +34,7 @@ Customers interact with the storefront through a Telegram bot; Control Room is w
 | Styling        | [Tailwind CSS 4](https://tailwindcss.com) |
 | Animation      | [Framer Motion](https://www.framer.com/motion/) |
 | Icons          | [Lucide](https://lucide.dev) |
+| Image pipeline | [`@imgly/background-removal`](https://github.com/imgly/background-removal-js) (browser) + [`sharp`](https://sharp.pixelplumbing.com) (WebP) |
 | Language       | TypeScript |
 
 ## Getting started
@@ -63,7 +65,6 @@ Customers interact with the storefront through a Telegram bot; Control Room is w
 
    # Server-only — required by the image upload route (/api/admin/process-image)
    SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
-   CLIPDROP_API_KEY=your-clipdrop-api-key
    ```
 
    There is no admin-email env var — who may sign in is controlled entirely by the
@@ -99,7 +100,7 @@ src/
 │   │   ├── products/      # Product catalog
 │   │   ├── residents/     # Registered Telegram bot users
 │   │   └── upload/        # Batch image upload (bg removal → WebP → Storage)
-│   ├── api/admin/process-image/  # Image pipeline route (Clipdrop + sharp)
+│   ├── api/admin/process-image/  # WebP conversion + Storage upload (sharp)
 │   ├── auth/callback/     # Supabase magic-link exchange
 │   └── login/             # Magic-link sign-in page
 ├── components/            # Sidebar, status badges, animated stats, etc.
@@ -122,4 +123,4 @@ The app is hosted on [Vercel](https://vercel.com), which builds and deploys dire
 
 CI is a single GitHub Actions workflow, [`.github/workflows/vercel-deploy.yml`](.github/workflows/vercel-deploy.yml), which runs `npm ci`, lint, and `next build` on every push and pull request. It does **not** deploy — Vercel does that.
 
-Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `CLIPDROP_API_KEY` as environment variables in your Vercel project settings.
+Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` as environment variables in your Vercel project settings.
