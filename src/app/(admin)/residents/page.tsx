@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils/cn";
+import { formatDateTime } from "@/lib/utils/format";
 
 type BotUserRow = {
   tg_username?: string | null;
@@ -13,17 +14,6 @@ type BotUserRow = {
 type OrderCountRow = {
   customer_chat_id?: number | string | null;
 };
-
-function formatRegisteredAt(iso: string | null | undefined) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-  return `${dd}.${mm}.${yyyy} ${hh}:${min}`;
-}
 
 function avatarLetter(handle: string): string {
   const clean = handle.replace(/^@/, "");
@@ -105,7 +95,7 @@ function ResidentRow({
         )}
       </td>
 
-      <td className="px-4 py-3 text-[#6b7280]">{formatRegisteredAt(row.created_at)}</td>
+      <td className="px-4 py-3 text-[#6b7280]">{formatDateTime(row.created_at)}</td>
     </tr>
   );
 }
@@ -251,7 +241,7 @@ export default function ResidentsPage() {
                     {oc} {oc === 1 ? "order" : "orders"}
                   </span>
                   <span className="block text-[10px] text-[#9ca3af]">
-                    {formatRegisteredAt(row.created_at)}
+                    {formatDateTime(row.created_at)}
                   </span>
                 </div>
               </div>

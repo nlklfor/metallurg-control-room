@@ -2,17 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DotGrid } from "@/components/DotGrid";
 import { AnimatedStats } from "@/components/AnimatedStats";
+import { formatDateTime } from "@/lib/utils/format";
 import type { OrderStatus } from "@/types";
-
-function formatOrderDate(iso: string) {
-  const d = new Date(iso);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-  return `${dd}.${mm}.${yyyy} ${hh}:${min}`;
-}
 
 export default async function OverviewPage() {
   const supabase = await createClient();
@@ -25,7 +16,7 @@ export default async function OverviewPage() {
     recentOrdersRes,
   ] = await Promise.all([
     supabase.from("orders").select("*", { count: "exact", head: true }),
-    supabase.from("orders").select("total_price"),
+    supabase.from("orders").select("total_price").neq("status", "cancelled"),
     supabase.from("products").select("*", { count: "exact", head: true }),
     supabase.from("bot_users").select("*", { count: "exact", head: true }),
     supabase
@@ -108,7 +99,7 @@ export default async function OverviewPage() {
                     />
                   </td>
                   <td className="px-4 py-3 text-[#6b7280]">
-                    {formatOrderDate(row.created_at)}
+                    {formatDateTime(row.created_at)}
                   </td>
                 </tr>
               ))}
@@ -137,7 +128,7 @@ export default async function OverviewPage() {
                 <span className="tabular-nums">
                   {(row.total_price ?? 0).toLocaleString("uk-UA")} UAH
                 </span>
-                <span>{formatOrderDate(row.created_at)}</span>
+                <span>{formatDateTime(row.created_at)}</span>
               </div>
             </div>
           ))}
