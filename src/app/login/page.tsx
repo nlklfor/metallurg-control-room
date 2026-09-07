@@ -44,6 +44,9 @@ function LoginForm() {
       options: {
         // Redirects to /auth/callback which exchanges the code for a session
         emailRedirectTo: `${window.location.origin}/auth/callback`,
+        // Don't provision new auth users from the login form — admins are
+        // created out-of-band and added to the `public.admins` table.
+        shouldCreateUser: false,
       },
     });
 
