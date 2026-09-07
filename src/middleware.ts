@@ -53,9 +53,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Authenticated but not the admin → redirect to /login
-  const adminEmail = process.env.ADMIN_EMAIL;
-  if (adminEmail && user.email !== adminEmail) {
+  // Authenticated but not an admin → redirect to /login.
+  // Source of truth is the DB `public.admins` table via `is_admin()` (the same
+  // predicate every RLS policy uses). Fail-closed: error or falsy → deny.
+  const { data: isAdmin, error } = await supabase.rpc("is_admin");
+  if (error || isAdmin !== true) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

@@ -1,8 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
 import { type NextRequest } from "next/server";
 import sharp from "sharp";
+import { checkAdmin } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -13,27 +12,6 @@ function makeServiceClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
-}
-
-async function getAdminUser() {
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (list) =>
-          list.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options),
-          ),
-      },
-    },
-  );
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
 }
 
 /** Build a multipart/form-data body manually to guarantee correct binary encoding. */
@@ -59,9 +37,8 @@ function buildMultipart(
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getAdminUser();
-  const adminEmail = process.env.ADMIN_EMAIL;
-  if (!user || (adminEmail && user.email !== adminEmail)) {
+  const { isAdmin } = await checkAdmin();
+  if (!isAdmin) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
     });

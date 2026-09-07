@@ -1,24 +1,16 @@
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { PageTransition } from "@/components/PageTransition";
-import { createClient } from "@/lib/supabase/server";
+import { checkAdmin } from "@/lib/supabase/server";
 
 export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user, isAdmin } = await checkAdmin();
 
-  if (!user) {
-    redirect("/login");
-  }
-
-  const adminEmail = process.env.ADMIN_EMAIL;
-  if (adminEmail && user.email !== adminEmail) {
+  if (!user || !isAdmin) {
     redirect("/login");
   }
 
