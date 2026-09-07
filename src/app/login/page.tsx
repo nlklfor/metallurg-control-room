@@ -6,6 +6,10 @@ import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 
 const RESEND_COOLDOWN = 45; // seconds
+// Supabase email OTP length is configurable (6–10) in the dashboard.
+// Don't hard-code a single length — accept the whole allowed range.
+const OTP_MIN = 6;
+const OTP_MAX = 10;
 
 function LoginForm() {
   const router = useRouter();
@@ -18,7 +22,7 @@ function LoginForm() {
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [cooldown, setCooldown] = useState(0);
-  const autoSubmitted = useRef(false);
+  const lastTried = useRef("");
 
   // Surface an error passed back from an /auth/* redirect.
   useEffect(() => {
@@ -56,7 +60,8 @@ function LoginForm() {
       setError(signError.message);
       return;
     }
-    autoSubmitted.current = false;
+    lastTried.current = "";
+    setCode("");
     setStep("code");
     setCooldown(RESEND_COOLDOWN);
   }, [email]);
@@ -72,7 +77,6 @@ function LoginForm() {
     });
     if (otpError) {
       setVerifying(false);
-      autoSubmitted.current = false;
       setError(otpError.message);
       return;
     }
@@ -80,13 +84,17 @@ function LoginForm() {
     router.refresh();
   }, [email, code, router]);
 
-  // Auto-verify once the 6th digit lands.
+  // Auto-verify shortly after the code stops changing (handles paste and any
+  // OTP length). Guarded so a wrong code isn't retried until it's edited.
   useEffect(() => {
-    if (step === "code" && code.length === 6 && !autoSubmitted.current) {
-      autoSubmitted.current = true;
+    if (step !== "code" || verifying) return;
+    if (code.length < OTP_MIN || code === lastTried.current) return;
+    const t = setTimeout(() => {
+      lastTried.current = code;
       void verifyCode();
-    }
-  }, [step, code, verifyCode]);
+    }, 700);
+    return () => clearTimeout(t);
+  }, [step, code, verifying, verifyCode]);
 
   const Wordmark = (
     <div className="mb-10 text-center">
@@ -111,7 +119,7 @@ function LoginForm() {
             // CODE SENT
           </p>
           <p className="mt-3 text-[13px] leading-relaxed text-[#0a0a0a]">
-            Enter the 6-digit code sent to
+            Enter the code sent to
             <br />
             <span className="font-bold">{email.trim()}</span>
           </p>
@@ -119,7 +127,7 @@ function LoginForm() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (code.length === 6) void verifyCode();
+              if (code.length >= OTP_MIN) void verifyCode();
             }}
             className="mt-6 flex flex-col gap-3"
           >
@@ -128,19 +136,19 @@ function LoginForm() {
               inputMode="numeric"
               autoComplete="one-time-code"
               pattern="[0-9]*"
-              maxLength={6}
+              maxLength={OTP_MAX}
               autoFocus
-              placeholder="000000"
+              placeholder="------"
               value={code}
               disabled={verifying}
               onChange={(e) =>
-                setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                setCode(e.target.value.replace(/\D/g, "").slice(0, OTP_MAX))
               }
-              className="w-full border border-black px-4 py-3 text-center font-mono text-[22px] tracking-[0.5em] text-[#0a0a0a] focus:border-black focus:outline-none focus:ring-0 disabled:opacity-50"
+              className="w-full border border-black px-4 py-3 text-center font-mono text-[20px] tracking-[0.3em] text-[#0a0a0a] focus:border-black focus:outline-none focus:ring-0 disabled:opacity-50"
             />
             <button
               type="submit"
-              disabled={verifying || code.length !== 6}
+              disabled={verifying || code.length < OTP_MIN}
               className="w-full bg-black py-3 text-[11px] uppercase tracking-[0.3em] text-white hover:bg-[#222] disabled:opacity-40"
             >
               {verifying ? "VERIFYING..." : "VERIFY →"}
@@ -228,7 +236,7 @@ function LoginForm() {
           ) : null}
         </form>
         <p className="mt-4 text-[11px] leading-relaxed text-[#9ca3af]">
-          We&apos;ll email a 6-digit code. No password needed.
+          We&apos;ll email a one-time code. No password needed.
         </p>
       </motion.div>
     </motion.div>

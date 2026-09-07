@@ -13,12 +13,16 @@ Mail, Outlook, and mobile clients. Forced light color-scheme.
 | `recovery.html`      | **Reset Password**        | `Reset your METALLURG password` |
 | `email-change.html`  | **Change Email Address**  | `Confirm your new email address` |
 
-## The app uses a 6-digit code, not a link
+## The app uses a one-time code, not a link
 
 `/login` requests a code (`signInWithOtp`) and verifies it
 (`verifyOtp({ email, token, type: "email" })`). So **`magic-link.html` shows
 only the code — no button, no link.** It's the one template that actually
 fires in normal use.
+
+Code length is whatever you set in Supabase → Authentication → Sign In /
+Providers → **Email OTP Length** (6–10; default 6). The login form accepts the
+whole range, so changing it won't break sign-in.
 
 The other four still carry a **button + code** because those flows
 (signup / invite / reset / email change) are link-driven. Their button points
@@ -53,7 +57,7 @@ templates; the code flow doesn't need it):
 
 ## Template variables
 
-- `{{ .Token }}` — the 6-digit code. Hero of `magic-link`; secondary in the
+- `{{ .Token }}` — the one-time code (6–10 digits per your settings). Hero of `magic-link`; secondary in the
   other code-bearing templates.
 - `{{ .SiteURL }}` / `{{ .TokenHash }}` — build the `/auth/confirm` link.
 - `{{ .Email }}` — recipient (shown in body + footer).

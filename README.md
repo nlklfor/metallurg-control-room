@@ -23,7 +23,7 @@ Customers interact with the storefront through a Telegram bot; Control Room is w
 - **Product catalog** — full CRUD for products: pricing, stock status, sizes, materials, weight, and images, with a slug that auto-generates from the product name (and can be manually overridden).
 - **Residents directory** — everyone registered through the Telegram bot, with a deterministic avatar, per-resident order count, and a "verified" badge once a resident has 3+ orders.
 - **Batch image upload** — drag-and-drop up to 20 images. Background removal runs **in the browser** (`@imgly/background-removal`, no API key or quota); each image is then sent to `/api/admin/process-image`, converted to WebP, and stored in the `products` Storage bucket. Progress streams into a terminal-style log.
-- **Passwordless auth** — sign-in with a 6-digit email code (Supabase OTP; no password, no link to click). Access is gated on the database `public.admins` table (via the `is_admin()` SQL function — the same predicate the RLS policies use), checked in `middleware.ts`, the `(admin)` layout, and the image API route. Anyone not in `admins` is redirected to `/login`.
+- **Passwordless auth** — sign-in with a one-time email code (Supabase OTP; no password, no link to click). The login form accepts any OTP length Supabase is configured for (6–10 digits). Access is gated on the database `public.admins` table (via the `is_admin()` SQL function — the same predicate the RLS policies use), checked in `middleware.ts`, the `(admin)` layout, and the image API route. Anyone not in `admins` is redirected to `/login`.
 
 ## Tech stack
 
@@ -113,7 +113,7 @@ src/
 
 ## Authentication flow
 
-1. The admin enters their email on `/login`; `signInWithOtp` (`shouldCreateUser: false`) emails a 6-digit code. Unknown emails get nothing.
+1. The admin enters their email on `/login`; `signInWithOtp` (`shouldCreateUser: false`) emails a one-time code. Unknown emails get nothing.
 2. The admin enters the code — `verifyOtp({ email, token, type: "email" })` establishes the session. No link, no PKCE code-verifier, immune to email link scanners.
 3. `/auth/confirm` and `/auth/callback` remain for the link-based flows (password reset, invite, email change) — a shared handler runs `verifyOtp({ token_hash, type })` or the legacy `?code=` exchange.
 4. `src/middleware.ts` checks every request: unauthenticated → `/login`; authenticated but `is_admin()` not true → `/login`.
