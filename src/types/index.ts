@@ -31,6 +31,7 @@ export interface Product {
 }
 
 export interface OrderItem {
+  product_id?: string;
   name: string;
   selectedSize: number | string;
   price: number;
@@ -55,6 +56,9 @@ export interface Order {
   country: string | null;
   customer_email: string | null;
   delivery_cost: number;
+  city_ref: string | null;
+  warehouse_ref: string | null;
+  recipient_phone: string | null;
 }
 
 export interface BotUser {

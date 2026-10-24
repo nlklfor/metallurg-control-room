@@ -8,6 +8,7 @@ import { formatDateTime } from "@/lib/utils/format";
 import { StatusBadge } from "@/components/StatusBadge";
 import type { Order, OrderItem, OrderStatus } from "@/types";
 import { clampStage, routeFor } from "@/lib/orders/routes";
+import { TtnDialog } from "@/components/TtnDialog";
 
 const ORDER_STATUSES: OrderStatus[] = [
   "waiting_for_payment",
@@ -59,6 +60,10 @@ function rowToOrder(row: Record<string, unknown>): Order {
     customer_email:
       row.customer_email == null ? null : String(row.customer_email),
     delivery_cost: Number(row.delivery_cost ?? 0),
+    city_ref: row.city_ref == null ? null : String(row.city_ref),
+    warehouse_ref: row.warehouse_ref == null ? null : String(row.warehouse_ref),
+    recipient_phone:
+      row.recipient_phone == null ? null : String(row.recipient_phone),
   };
 }
 
@@ -82,6 +87,7 @@ export default function OrdersPage() {
   // Delivery stage shown to the customer on the site and in the bot — an
   // index into the order's route, independent of the payment status.
   const [panelStage, setPanelStage] = useState(0);
+  const [ttnOpen, setTtnOpen] = useState(false);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -397,6 +403,12 @@ export default function OrdersPage() {
                         ["Zone", "Ukraine — Nova Poshta"],
                         ["City", selectedOrder.city ?? "—"],
                         ["Branch", selectedOrder.np_branch ?? "—"],
+                        [
+                          "Phone",
+                          selectedOrder.recipient_phone
+                            ? `+${selectedOrder.recipient_phone}`
+                            : "—",
+                        ],
                         ["TTN", selectedOrder.tracking_number ?? "—"],
                       ]
                     : [
@@ -414,6 +426,17 @@ export default function OrdersPage() {
                     </div>
                   ))}
                 </dl>
+                {selectedOrder.shipping_zone === "Ukraine" &&
+                !selectedOrder.tracking_number &&
+                selectedOrder.status !== "cancelled" ? (
+                  <button
+                    type="button"
+                    onClick={() => setTtnOpen(true)}
+                    className="mt-4 w-full border border-black py-3 text-[11px] uppercase tracking-[0.3em] text-black hover:bg-black hover:text-white"
+                  >
+                    CREATE NOVA POSHTA TTN
+                  </button>
+                ) : null}
               </section>
 
               <section>
@@ -598,6 +621,26 @@ export default function OrdersPage() {
           </div>
         ) : null}
       </div>
+      {ttnOpen && selectedOrder ? (
+        <TtnDialog
+          order={selectedOrder}
+          onClose={() => setTtnOpen(false)}
+          onCreated={async (ttn) => {
+            setTtnOpen(false);
+            await loadOrders();
+            setSelectedOrder((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    tracking_number: ttn,
+                    status: "shipped",
+                    current_status_index: 2,
+                  }
+                : prev,
+            );
+          }}
+        />
+      ) : null}
     </div>
   );
 }
