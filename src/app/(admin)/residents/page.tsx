@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils/cn";
 import { formatDateTime } from "@/lib/utils/format";
+import { normaliseHandle } from "@/lib/orders/routes";
 
 type BotUserRow = {
   tg_username?: string | null;
@@ -12,7 +13,7 @@ type BotUserRow = {
 };
 
 type OrderCountRow = {
-  customer_chat_id?: number | string | null;
+  contact?: string | null;
 };
 
 function avatarLetter(handle: string): string {
@@ -114,7 +115,9 @@ export default function ResidentsPage() {
         .from("bot_users")
         .select("tg_username, chat_id, created_at")
         .order("created_at", { ascending: false }),
-      supabase.from("orders").select("customer_chat_id"),
+      // Orders aren't linked to bot users by id; the checkout "contact" field
+      // holds the customer's @username (or a phone), so match on that.
+      supabase.from("orders").select("contact").neq("status", "cancelled"),
     ]);
 
     if (usersRes.error) {
@@ -123,10 +126,14 @@ export default function ResidentsPage() {
       setRows((usersRes.data as BotUserRow[]) ?? []);
     }
 
+    if (ordersRes.error) {
+      setError(ordersRes.error.message);
+    }
+
     const map = new Map<string, number>();
     for (const o of (ordersRes.data ?? []) as OrderCountRow[]) {
-      if (o.customer_chat_id == null) continue;
-      const key = String(o.customer_chat_id);
+      const key = normaliseHandle(o.contact);
+      if (!key) continue;
       map.set(key, (map.get(key) ?? 0) + 1);
     }
     setOrderCountMap(map);
@@ -194,7 +201,7 @@ export default function ResidentsPage() {
                 key={`${row.chat_id ?? ""}-${i}`}
                 row={row}
                 i={i}
-                orderCount={orderCountMap.get(String(row.chat_id)) ?? 0}
+                orderCount={orderCountMap.get(normaliseHandle(row.tg_username)) ?? 0}
               />
             ))}
           </tbody>
@@ -207,7 +214,7 @@ export default function ResidentsPage() {
           const handle = row.tg_username ?? "";
           const displayHandle = handle ? `@${handle}` : "—";
           const chatId = row.chat_id == null ? null : String(row.chat_id);
-          const oc = orderCountMap.get(String(row.chat_id)) ?? 0;
+          const oc = orderCountMap.get(normaliseHandle(row.tg_username)) ?? 0;
           const isVerified = oc >= 3;
           const letter = handle ? avatarLetter(handle) : "?";
           const bgColor = handle ? avatarColor(handle) : "bg-[#374151]";
