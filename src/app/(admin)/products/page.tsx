@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Trash2, X } from "lucide-react";
+import { Copy, Trash2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils/cn";
 import { StatusBadge } from "@/components/StatusBadge";
 import type { Product, ProductCategory } from "@/types";
 import { parseWeightKg } from "@/lib/utils/weight";
+import { generateSku } from "@/lib/utils/sku";
 
 type StockStatus = NonNullable<Product["stock_status"]>;
 type SizeEntry = { size: string; qty: number };
@@ -122,6 +123,8 @@ export default function ProductsPage() {
   const [formSku, setFormSku] = useState("");
   const [formBox, setFormBox] = useState("");
   const [formCondition, setFormCondition] = useState("");
+  // Set when the create panel was opened via DUPLICATE (shows a hint).
+  const [duplicatedFrom, setDuplicatedFrom] = useState<string | null>(null);
 
   const loadProducts = useCallback(async () => {
     setLoading(true);
@@ -173,6 +176,7 @@ export default function ProductsPage() {
 
   function openCreate() {
     setActionError(null);
+    setDuplicatedFrom(null);
     setSelectedProduct(null);
     setPanelMode("create");
     setFormName("");
@@ -194,8 +198,24 @@ export default function ProductsPage() {
     setPanelOpen(true);
   }
 
+  /**
+   * Same object in another colourway: copy every field except photos, SKU and
+   * slug. Opens as a NEW product; nothing is saved until SAVE.
+   */
+  function openDuplicate(p: Product) {
+    openEdit(p);
+    setSelectedProduct(null);
+    setPanelMode("create");
+    setDuplicatedFrom(p.name ?? "product");
+    setFormSlug(toSlug(p.name ?? ""));
+    setSlugManuallyEdited(false);
+    setFormImages("");
+    setFormSku(generateSku(p.name ?? "", products.map((x) => x.sku)));
+  }
+
   function openEdit(p: Product) {
     setActionError(null);
+    setDuplicatedFrom(null);
     setSelectedProduct(p);
     setPanelMode("edit");
     setFormName(p.name ?? "");
@@ -237,6 +257,32 @@ export default function ProductsPage() {
     const finalSlug = formSlug.trim() || toSlug(formName);
     const sizeStock = entriesToSizeStock(formSizeStock);
     const hasSizes = Object.keys(sizeStock).length > 0;
+    const finalSku =
+      formSku.trim() ||
+      (panelMode === "create" ? generateSku(formName, products.map((x) => x.sku)) : "");
+
+    // The storefront routes by slug (/product/<slug>) — it must be unique.
+    const slugOwner = products.find(
+      (x) => x.slug === finalSlug && x.id !== selectedProduct?.id,
+    );
+    if (finalSlug && slugOwner) {
+      setSaving(false);
+      setActionError(
+        `Slug "${finalSlug}" is already used by "${slugOwner.name}". Change the name (e.g. add the colour) or the slug.`,
+      );
+      return;
+    }
+    const skuOwner = products.find(
+      (x) =>
+        finalSku &&
+        x.sku?.toUpperCase() === finalSku.toUpperCase() &&
+        x.id !== selectedProduct?.id,
+    );
+    if (skuOwner) {
+      setSaving(false);
+      setActionError(`SKU ${finalSku} is already used by "${skuOwner.name}".`);
+      return;
+    }
 
     // Stock can change while this panel is open (a customer orders, an order
     // is cancelled). Don't silently overwrite it with the stale snapshot.
@@ -280,7 +326,7 @@ export default function ProductsPage() {
         ? deriveQuantity(formSizeStock)
         : Math.max(0, Math.floor(Number(formQuantity) || 0)),
       image_url: parseImages(),
-      sku: formSku || null,
+      sku: finalSku || null,
       box: formBox || null,
       condition: formCondition || null,
     };
@@ -552,9 +598,20 @@ export default function ProductsPage() {
             <div className="flex items-center justify-between border-b border-[#e5e5e5] px-6 py-4">
               <span className="font-bold text-[#0a0a0a]">
                 {panelMode === "create"
-                  ? "NEW PRODUCT"
+                  ? duplicatedFrom
+                    ? "NEW PRODUCT — COPY"
+                    : "NEW PRODUCT"
                   : (formName || "Product")}
               </span>
+              {panelMode === "edit" && selectedProduct ? (
+                <button
+                  type="button"
+                  onClick={() => openDuplicate(selectedProduct)}
+                  className="ml-auto mr-4 flex items-center gap-1.5 border border-[#e5e5e5] px-2.5 py-1.5 text-[10px] uppercase tracking-[0.15em] text-[#0a0a0a] hover:border-black"
+                >
+                  <Copy size={12} /> Duplicate
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setPanelOpen(false)}
@@ -565,6 +622,12 @@ export default function ProductsPage() {
               </button>
             </div>
             <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-6">
+              {duplicatedFrom ? (
+                <p className="border border-[#e5e5e5] bg-[#f9fafb] px-3 py-2 text-[11px] leading-relaxed text-[#6b7280]">
+                  Copied from <span className="text-[#0a0a0a]">{duplicatedFrom}</span>. Change the
+                  name (e.g. the colour), add photos and check sizes, then save. SKU is new.
+                </p>
+              ) : null}
               <label className="block">
                 <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
                   name
@@ -577,13 +640,27 @@ export default function ProductsPage() {
               </label>
 
               <label className="block">
-                <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
+                <span className="mb-1 flex items-center justify-between text-[10px] uppercase text-[#6b7280]">
                   sku
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormSku(
+                        generateSku(
+                          formName,
+                          products.filter((x) => x.id !== selectedProduct?.id).map((x) => x.sku),
+                        ),
+                      )
+                    }
+                    className="text-[10px] uppercase tracking-[0.15em] text-[#9ca3af] hover:text-black"
+                  >
+                    generate
+                  </button>
                 </span>
                 <input
                   value={formSku}
                   onChange={(e) => setFormSku(e.target.value)}
-                  placeholder="e.g. MTL-JKT-001"
+                  placeholder="empty → generated on save (MTL-NKMN-123456)"
                   className="w-full border border-[#e5e5e5] px-3 py-2 font-mono text-[12px] focus:border-black focus:outline-none focus:ring-0"
                 />
               </label>
