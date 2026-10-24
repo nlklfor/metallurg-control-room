@@ -50,7 +50,11 @@ export interface Order {
   current_status_index: number;
   is_international: boolean;
   tracking_number: string | null;
-  customer_chat_id: number | null;
+  city: string | null;
+  np_branch: string | null;
+  country: string | null;
+  customer_email: string | null;
+  delivery_cost: number;
 }
 
 export interface BotUser {

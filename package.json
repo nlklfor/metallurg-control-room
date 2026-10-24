@@ -15,11 +15,11 @@
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
     "lucide-react": "^0.469.0",
-    "next": "^15.2.4",
+    "next": "^15.5.28",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-dropzone": "^15.0.0",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.5",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
@@ -28,7 +28,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "^15.2.4",
+    "eslint-config-next": "^15.5.28",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

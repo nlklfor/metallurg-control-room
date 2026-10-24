@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils/cn";
 import { formatDateTime } from "@/lib/utils/format";
 import { StatusBadge } from "@/components/StatusBadge";
 import type { Order, OrderItem, OrderStatus } from "@/types";
+import { clampStage, routeFor } from "@/lib/orders/routes";
 
 const ORDER_STATUSES: OrderStatus[] = [
   "waiting_for_payment",
@@ -16,10 +17,6 @@ const ORDER_STATUSES: OrderStatus[] = [
   "completed",
   "cancelled",
 ];
-
-function statusIndex(status: OrderStatus): number {
-  return ORDER_STATUSES.indexOf(status);
-}
 
 function parseItems(raw: unknown): OrderItem[] {
   if (Array.isArray(raw)) return raw as OrderItem[];
@@ -56,12 +53,12 @@ function rowToOrder(row: Record<string, unknown>): Order {
     is_international: Boolean(row.is_international),
     tracking_number:
       row.tracking_number == null ? null : String(row.tracking_number),
-    customer_chat_id:
-      row.customer_chat_id == null
-        ? null
-        : typeof row.customer_chat_id === "number"
-          ? row.customer_chat_id
-          : Number(row.customer_chat_id),
+    city: row.city == null ? null : String(row.city),
+    np_branch: row.np_branch == null ? null : String(row.np_branch),
+    country: row.country == null ? null : String(row.country),
+    customer_email:
+      row.customer_email == null ? null : String(row.customer_email),
+    delivery_cost: Number(row.delivery_cost ?? 0),
   };
 }
 
@@ -82,6 +79,9 @@ export default function OrdersPage() {
     "waiting_for_payment",
   );
   const [panelTracking, setPanelTracking] = useState("");
+  // Delivery stage shown to the customer on the site and in the bot — an
+  // index into the order's route, independent of the payment status.
+  const [panelStage, setPanelStage] = useState(0);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -107,6 +107,12 @@ export default function OrdersPage() {
     if (selectedOrder) {
       setPanelStatus(selectedOrder.status);
       setPanelTracking(selectedOrder.tracking_number ?? "");
+      setPanelStage(
+        clampStage(
+          selectedOrder.current_status_index,
+          routeFor(selectedOrder.shipping_zone),
+        ),
+      );
       setDeleteConfirm(false);
       setActionError(null);
     }
@@ -120,7 +126,9 @@ export default function OrdersPage() {
       return (
         o.order_number.toLowerCase().includes(q) ||
         o.customer_name.toLowerCase().includes(q) ||
-        o.contact.toLowerCase().includes(q)
+        o.contact.toLowerCase().includes(q) ||
+        (o.tracking_number ?? "").includes(q) ||
+        (o.city ?? "").toLowerCase().includes(q)
       );
     });
   }, [orders, filterStatus, searchQuery]);
@@ -134,8 +142,8 @@ export default function OrdersPage() {
       .from("orders")
       .update({
         status: panelStatus,
-        tracking_number: panelTracking || null,
-        current_status_index: statusIndex(panelStatus),
+        tracking_number: panelTracking.trim() || null,
+        current_status_index: panelStage,
       })
       .eq("id", selectedOrder.id);
     setSaving(false);
@@ -149,8 +157,8 @@ export default function OrdersPage() {
         ? {
             ...prev,
             status: panelStatus,
-            tracking_number: panelTracking || null,
-            current_status_index: statusIndex(panelStatus),
+            tracking_number: panelTracking.trim() || null,
+            current_status_index: panelStage,
           }
         : prev,
     );
@@ -159,7 +167,9 @@ export default function OrdersPage() {
   }
 
   async function confirmDelete() {
-    if (!selectedOrder) return;
+    // Only cancelled orders can be deleted: cancelling is what returns the
+    // items to stock (DB trigger), deleting an active order would lose them.
+    if (!selectedOrder || selectedOrder.status !== "cancelled") return;
     setDeleting(true);
     setActionError(null);
     const supabase = createClient();
@@ -365,21 +375,42 @@ export default function OrdersPage() {
                     ["Date", formatDateTime(selectedOrder.created_at)],
                     ["Customer", selectedOrder.customer_name],
                     ["Contact", selectedOrder.contact],
-                    ["Shipping zone", selectedOrder.shipping_zone],
-                    [
-                      "International",
-                      selectedOrder.is_international ? "Yes" : "No",
-                    ],
-                    [
-                      "Total price",
-                      `${selectedOrder.total_price.toLocaleString("uk-UA")} UAH`,
-                    ],
+                    ["Email", selectedOrder.customer_email ?? "—"],
                   ].map(([k, v]) => (
                     <div key={k} className="flex gap-4 text-[13px]">
                       <dt className="w-32 shrink-0 text-[10px] uppercase text-[#6b7280]">
                         {k}
                       </dt>
                       <dd className="text-[#0a0a0a]">{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+
+              <section>
+                <p className="mb-3 text-[10px] uppercase tracking-[0.2em] text-[#6b7280]">
+                  // SHIPPING
+                </p>
+                <dl className="space-y-2">
+                  {(selectedOrder.shipping_zone === "Ukraine"
+                    ? [
+                        ["Zone", "Ukraine — Nova Poshta"],
+                        ["City", selectedOrder.city ?? "—"],
+                        ["Branch", selectedOrder.np_branch ?? "—"],
+                        ["TTN", selectedOrder.tracking_number ?? "—"],
+                      ]
+                    : [
+                        ["Zone", "International"],
+                        ["Country", selectedOrder.country ?? "—"],
+                        ["City", selectedOrder.city ?? "—"],
+                        ["TTN", selectedOrder.tracking_number ?? "—"],
+                      ]
+                  ).map(([k, v]) => (
+                    <div key={k} className="flex gap-4 text-[13px]">
+                      <dt className="w-32 shrink-0 text-[10px] uppercase text-[#6b7280]">
+                        {k}
+                      </dt>
+                      <dd className="select-all text-[#0a0a0a]">{v}</dd>
                     </div>
                   ))}
                 </dl>
@@ -426,11 +457,62 @@ export default function OrdersPage() {
                     })}
                   </tbody>
                 </table>
+                <dl className="mt-3 space-y-1 text-[12px]">
+                  <div className="flex justify-between text-[#6b7280]">
+                    <dt>Items</dt>
+                    <dd className="tabular-nums">
+                      {(
+                        selectedOrder.total_price - selectedOrder.delivery_cost
+                      ).toLocaleString("uk-UA")}{" "}
+                      UAH
+                    </dd>
+                  </div>
+                  {selectedOrder.shipping_zone === "Ukraine" ? (
+                    <div className="flex justify-between text-[#6b7280]">
+                      <dt>Delivery (Nova Poshta)</dt>
+                      <dd className="tabular-nums">
+                        {selectedOrder.delivery_cost.toLocaleString("uk-UA")} UAH
+                      </dd>
+                    </div>
+                  ) : null}
+                  <div className="flex justify-between font-bold text-[#0a0a0a]">
+                    <dt>Total</dt>
+                    <dd className="tabular-nums">
+                      {selectedOrder.total_price.toLocaleString("uk-UA")} UAH
+                    </dd>
+                  </div>
+                </dl>
               </section>
 
               <section className="border-t border-[#e5e5e5] pt-6">
                 <p className="mb-3 text-[10px] uppercase tracking-[0.2em] text-[#6b7280]">
-                  // UPDATE ORDER
+                  // DELIVERY STAGE — what the customer sees
+                </p>
+                <ol className="mb-6 flex flex-col">
+                  {routeFor(selectedOrder.shipping_zone).map((step, i) => (
+                    <li key={step}>
+                      <button
+                        type="button"
+                        onClick={() => setPanelStage(i)}
+                        aria-pressed={panelStage === i}
+                        className={cn(
+                          "flex w-full items-center gap-3 border-b border-[#f5f5f5] px-2 py-2 text-left font-mono text-[12px] transition-colors",
+                          i === panelStage
+                            ? "bg-black text-white"
+                            : i < panelStage
+                              ? "text-[#6b7280] line-through hover:bg-[#f9fafb]"
+                              : "text-[#0a0a0a] hover:bg-[#f9fafb]",
+                        )}
+                      >
+                        <span className="w-5 tabular-nums">{String(i + 1).padStart(2, "0")}</span>
+                        {step}
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+
+                <p className="mb-3 text-[10px] uppercase tracking-[0.2em] text-[#6b7280]">
+                  // PAYMENT / ORDER STATUS
                 </p>
                 <select
                   value={panelStatus}
@@ -463,13 +545,25 @@ export default function OrdersPage() {
                 {savedFlash ? (
                   <p className="mt-2 text-xs text-green-600">✓ Saved</p>
                 ) : null}
+                {panelStatus === "cancelled" &&
+                selectedOrder.status !== "cancelled" ? (
+                  <p className="mt-2 text-xs text-[#6b7280]">
+                    Saving as cancelled returns the items to stock.
+                  </p>
+                ) : null}
                 {actionError ? (
                   <p className="mt-2 text-xs text-red-500">{actionError}</p>
                 ) : null}
               </section>
 
               <section className="mt-8 border-t border-[#e5e5e5] pt-6">
-                {!deleteConfirm ? (
+                {selectedOrder.status !== "cancelled" ? (
+                  <p className="text-[11px] leading-relaxed text-[#6b7280]">
+                    To delete an order, cancel it first (status → cancelled,
+                    save). Cancelling returns the items to stock; deleting an
+                    active order would lose them.
+                  </p>
+                ) : !deleteConfirm ? (
                   <button
                     type="button"
                     onClick={() => setDeleteConfirm(true)}

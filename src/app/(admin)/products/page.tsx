@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils/cn";
 import { StatusBadge } from "@/components/StatusBadge";
 import type { Product, ProductCategory } from "@/types";
+import { parseWeightKg } from "@/lib/utils/weight";
 
 type StockStatus = NonNullable<Product["stock_status"]>;
 type SizeEntry = { size: string; qty: number };
@@ -43,6 +44,15 @@ function deriveSizes(entries: SizeEntry[]): (string | number)[] {
 
 function deriveQuantity(entries: SizeEntry[]): number {
   return entries.reduce((sum, e) => sum + e.qty, 0);
+}
+
+function sameStock(
+  a: Record<string, number> | null | undefined,
+  b: Record<string, number> | null | undefined,
+): boolean {
+  const norm = (o: Record<string, number> | null | undefined) =>
+    JSON.stringify(Object.entries(o ?? {}).sort(([x], [y]) => x.localeCompare(y)));
+  return norm(a) === norm(b);
 }
 
 function rowToProduct(row: Record<string, unknown>): Product {
@@ -104,6 +114,9 @@ export default function ProductsPage() {
   const [formStock, setFormStock] = useState<StockStatus>("in_stock");
   const [formIsNew, setFormIsNew] = useState(false);
   const [formSizeStock, setFormSizeStock] = useState<SizeEntry[]>([]);
+  // Only used for products without sizes (size_stock empty); with sizes the
+  // quantity is always the sum of size_stock (DB trigger enforces it too).
+  const [formQuantity, setFormQuantity] = useState("0");
   const [formCategory, setFormCategory] = useState<ProductCategory | "">("");
   const [formImages, setFormImages] = useState("");
   const [formSku, setFormSku] = useState("");
@@ -172,6 +185,7 @@ export default function ProductsPage() {
     setFormStock("in_stock");
     setFormIsNew(false);
     setFormSizeStock([]);
+    setFormQuantity("0");
     setFormCategory("");
     setFormImages("");
     setFormSku("");
@@ -194,6 +208,7 @@ export default function ProductsPage() {
     setFormStock(p.stock_status ?? "in_stock");
     setFormIsNew(Boolean(p.is_new));
     setFormSizeStock(sizeStockToEntries(p.size_stock));
+    setFormQuantity(String(p.quantity ?? 0));
     setFormCategory(p.category ?? "");
     setFormImages((p.image_url ?? []).join("\n"));
     setFormSku(p.sku ?? "");
@@ -210,12 +225,44 @@ export default function ProductsPage() {
   }
 
   async function saveProduct() {
-    setSaving(true);
     setActionError(null);
+    const weight = parseWeightKg(formWeight);
+    if (weight.error) {
+      setActionError(weight.error);
+      return;
+    }
+    setSaving(true);
     const supabase = createClient();
 
     const finalSlug = formSlug.trim() || toSlug(formName);
     const sizeStock = entriesToSizeStock(formSizeStock);
+    const hasSizes = Object.keys(sizeStock).length > 0;
+
+    // Stock can change while this panel is open (a customer orders, an order
+    // is cancelled). Don't silently overwrite it with the stale snapshot.
+    if (panelMode === "edit" && selectedProduct) {
+      const { data: fresh, error: freshErr } = await supabase
+        .from("products")
+        .select("size_stock, quantity")
+        .eq("id", selectedProduct.id)
+        .single();
+      if (freshErr) {
+        setSaving(false);
+        setActionError(freshErr.message);
+        return;
+      }
+      const stockMoved =
+        !sameStock(fresh?.size_stock, selectedProduct.size_stock) ||
+        (!hasSizes && Number(fresh?.quantity ?? 0) !== Number(selectedProduct.quantity ?? 0));
+      if (stockMoved) {
+        setSaving(false);
+        setActionError(
+          "Stock changed since you opened this product (an order or a cancellation). Close and reopen it to edit the current numbers.",
+        );
+        await loadProducts();
+        return;
+      }
+    }
 
     const payload = {
       name: formName || null,
@@ -223,13 +270,15 @@ export default function ProductsPage() {
       price: formPrice === "" ? null : Number(formPrice),
       description: formDescription || null,
       materials: formMaterials || null,
-      weight: formWeight || null,
+      weight: weight.value,
       stock_status: formStock,
       is_new: formIsNew,
       category: formCategory || null,
       size_stock: sizeStock,
       sizes: deriveSizes(formSizeStock),
-      quantity: deriveQuantity(formSizeStock),
+      quantity: hasSizes
+        ? deriveQuantity(formSizeStock)
+        : Math.max(0, Math.floor(Number(formQuantity) || 0)),
       image_url: parseImages(),
       sku: formSku || null,
       box: formBox || null,
@@ -673,10 +722,23 @@ export default function ProductsPage() {
                     total qty: {totalQty} · sizes: {deriveSizes(formSizeStock).join(", ") || "—"}
                   </span>
                 )}
-                {formStock === "pre_order" && formSizeStock.length === 0 && (
-                  <span className="mt-1.5 block text-[11px] text-[#9ca3af]">
-                    pre_order — size_stock may be empty
-                  </span>
+                {formSizeStock.length === 0 && (
+                  <label className="mt-3 block">
+                    <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
+                      quantity (no sizes)
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      value={formQuantity}
+                      onChange={(e) => setFormQuantity(e.target.value)}
+                      className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
+                    />
+                    <span className="mt-1.5 block text-[11px] text-[#9ca3af]">
+                      For one-size items (accessories). Add sizes above for shoes and apparel.
+                    </span>
+                  </label>
                 )}
               </div>
 
@@ -705,12 +767,13 @@ export default function ProductsPage() {
 
               <label className="block">
                 <span className="mb-1 block text-[10px] uppercase text-[#6b7280]">
-                  weight
+                  weight, kg (used for Nova Poshta delivery cost)
                 </span>
                 <input
+                  inputMode="decimal"
                   value={formWeight}
                   onChange={(e) => setFormWeight(e.target.value)}
-                  placeholder="e.g. 1.2 kg"
+                  placeholder="e.g. 1.2"
                   className="w-full border border-[#e5e5e5] px-3 py-2 text-[13px] focus:border-black focus:outline-none focus:ring-0"
                 />
               </label>
