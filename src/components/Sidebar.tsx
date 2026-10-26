@@ -6,6 +6,7 @@ import {
   ShoppingBag,
   Users,
   Upload,
+  Image as ImageIcon,
   Menu,
   X,
   LogOut,
@@ -22,6 +23,7 @@ const navItems = [
   { href: "/products", label: "PRODUCTS", icon: Package },
   { href: "/residents", label: "RESIDENTS", icon: Users },
   { href: "/upload", label: "UPLOAD", icon: Upload },
+  { href: "/stories", label: "STORIES", icon: ImageIcon },
 ] as const;
 
 export function Sidebar({ userEmail }: { userEmail: string | null }) {
